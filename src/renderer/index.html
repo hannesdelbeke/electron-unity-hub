@@ -9,7 +9,16 @@
 <body>
   <main class="app">
     <section class="toolbar">
-      <h1>Projects</h1>
+      <div class="title-wrap">
+        <h1>Projects</h1>
+        <div class="project-menu-wrap">
+          <button id="project-menu-toggle" class="btn icon-btn" title="Project menu" aria-label="Project menu">☰</button>
+          <div id="project-menu" class="menu hidden">
+            <button id="project-settings" class="menu-item">Settings</button>
+            <button id="project-remove" class="menu-item">Remove selected</button>
+          </div>
+        </div>
+      </div>
       <input id="search" type="search" placeholder="Search projects" />
       <div class="add-wrap">
         <button id="add-toggle" class="btn">Add</button>
@@ -65,7 +74,7 @@
         </div>
       </label>
       <menu>
-        <button value="cancel" class="btn">Cancel</button>
+        <button value="cancel" class="btn" formnovalidate>Cancel</button>
         <button id="disk-save" value="default" class="btn accent">Add project</button>
       </menu>
     </form>
@@ -96,8 +105,24 @@
         </div>
       </label>
       <menu>
-        <button value="cancel" class="btn">Cancel</button>
+        <button value="cancel" class="btn" formnovalidate>Cancel</button>
         <button id="repo-save" value="default" class="btn accent">Clone and add</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="settings-dialog" class="modal">
+    <form method="dialog" id="settings-form" class="modal-form">
+      <h2>Settings</h2>
+      <label>Default Unity executable
+        <div class="input-row">
+          <input id="settings-default-unity-exe" type="text" placeholder="Optional" />
+          <button id="settings-browse-exe" type="button" class="btn">Browse</button>
+        </div>
+      </label>
+      <menu>
+        <button value="cancel" class="btn" formnovalidate>Cancel</button>
+        <button id="settings-save" value="default" class="btn accent">Save</button>
       </menu>
     </form>
   </dialog>

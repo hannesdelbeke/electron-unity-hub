@@ -41,6 +41,16 @@ h1 {
   font-weight: 700;
 }
 
+.title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-menu-wrap {
+  position: relative;
+}
+
 #search {
   border: 1px solid var(--line);
   background: var(--panel);
@@ -111,6 +121,13 @@ tr.selected {
   border-radius: 8px;
   cursor: pointer;
   font: inherit;
+}
+
+.icon-btn {
+  width: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
 }
 
 .btn:hover {

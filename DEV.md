@@ -54,6 +54,12 @@ Demo constraints:
 - Update `DEV.md` when architecture or key workflows change.
 - Keep task planning in `TODO.md`, not in this file.
 
+## Commit Policy
+
+- Include a Codex co-author trailer on commits made with Codex assistance.
+- Preferred trailer format:
+  - `Co-authored-by: Codex <codex@openai.com>`
+
 ## Build and Run
 
 Desktop app:

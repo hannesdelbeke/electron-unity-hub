@@ -5,9 +5,12 @@ const statusEl = document.getElementById("status");
 const searchInput = document.getElementById("search") as HTMLInputElement;
 const addToggle = document.getElementById("add-toggle") as HTMLButtonElement;
 const addMenu = document.getElementById("add-menu") as HTMLDivElement;
+const projectMenuToggle = document.getElementById("project-menu-toggle") as HTMLButtonElement;
+const projectMenu = document.getElementById("project-menu") as HTMLDivElement;
 
 const diskDialog = document.getElementById("disk-dialog") as HTMLDialogElement;
 const repoDialog = document.getElementById("repo-dialog") as HTMLDialogElement;
+const settingsDialog = document.getElementById("settings-dialog") as HTMLDialogElement;
 
 const diskPath = document.getElementById("disk-path") as HTMLInputElement;
 const diskNickname = document.getElementById("disk-nickname") as HTMLInputElement;
@@ -18,10 +21,12 @@ const repoBranch = document.getElementById("repo-branch") as HTMLInputElement;
 const repoTarget = document.getElementById("repo-target") as HTMLInputElement;
 const repoNickname = document.getElementById("repo-nickname") as HTMLInputElement;
 const repoUnityExe = document.getElementById("repo-unity-exe") as HTMLInputElement;
+const settingsDefaultUnityExe = document.getElementById("settings-default-unity-exe") as HTMLInputElement;
 
 let projects: ProjectEntry[] = [];
 let selectedId = "";
 let searchText = "";
+const defaultUnityExeKey = "unityLauncher.defaultUnityExe";
 
 function setStatus(msg: string): void {
   if (statusEl) {
@@ -58,8 +63,13 @@ function closeAddMenu(): void {
   addMenu.classList.add("hidden");
 }
 
+function closeProjectMenu(): void {
+  projectMenu.classList.add("hidden");
+}
+
 function openDialog(dialogEl: HTMLDialogElement): void {
   closeAddMenu();
+  closeProjectMenu();
   dialogEl.showModal();
 }
 
@@ -150,7 +160,7 @@ async function addFromDisk(): Promise<void> {
     name: inferredName,
     nickname: diskNickname.value.trim() || inferredName,
     unityVersion: version,
-    unityExe: diskUnityExe.value.trim(),
+    unityExe: diskUnityExe.value.trim() || settingsDefaultUnityExe.value.trim(),
   });
 
   await saveProject(project);
@@ -186,7 +196,7 @@ async function addFromRepo(): Promise<void> {
     name: inferredName,
     nickname: repoNickname.value.trim() || inferredName,
     unityVersion: version,
-    unityExe: repoUnityExe.value.trim(),
+    unityExe: repoUnityExe.value.trim() || settingsDefaultUnityExe.value.trim(),
   });
 
   await saveProject(project);
@@ -230,12 +240,21 @@ async function removeSelectedProject(): Promise<void> {
 function wireGlobalEvents(): void {
   addToggle.addEventListener("click", () => {
     addMenu.classList.toggle("hidden");
+    closeProjectMenu();
+  });
+
+  projectMenuToggle.addEventListener("click", () => {
+    projectMenu.classList.toggle("hidden");
+    closeAddMenu();
   });
 
   document.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     if (!target.closest(".add-wrap")) {
       closeAddMenu();
+    }
+    if (!target.closest(".project-menu-wrap")) {
+      closeProjectMenu();
     }
   });
 
@@ -251,6 +270,12 @@ function wireGlobalEvents(): void {
   document.getElementById("new-project")?.addEventListener("click", () => {
     void window.launcherApi.openUnityHub();
     setStatus("Opened Unity Hub for new project creation");
+  });
+  document.getElementById("project-settings")?.addEventListener("click", () => openDialog(settingsDialog));
+  document.getElementById("project-remove")?.addEventListener("click", () => void removeSelectedProject());
+  document.getElementById("add-hub")?.addEventListener("click", () => {
+    closeAddMenu();
+    setStatus("Import from Hub will be wired next.");
   });
 }
 
@@ -300,10 +325,32 @@ function wireRepoDialog(): void {
   });
 }
 
+function wireSettingsDialog(): void {
+  const saved = localStorage.getItem(defaultUnityExeKey);
+  if (saved) {
+    settingsDefaultUnityExe.value = saved;
+  }
+
+  document.getElementById("settings-browse-exe")?.addEventListener("click", async () => {
+    const file = await window.launcherApi.pickFile();
+    if (file) {
+      settingsDefaultUnityExe.value = file;
+    }
+  });
+
+  document.getElementById("settings-save")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    localStorage.setItem(defaultUnityExeKey, settingsDefaultUnityExe.value.trim());
+    settingsDialog.close();
+    setStatus("Settings saved");
+  });
+}
+
 function init(): void {
   wireGlobalEvents();
   wireDiskDialog();
   wireRepoDialog();
+  wireSettingsDialog();
   void refreshProjects();
 }
 
