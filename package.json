@@ -6,15 +6,34 @@
   "scripts": {
     "build": "tsc && node -e \"const fs=require('fs');fs.mkdirSync('dist/renderer/assets',{recursive:true});fs.copyFileSync('src/renderer/index.html','dist/renderer/index.html');fs.copyFileSync('src/renderer/styles.css','dist/renderer/styles.css');fs.copyFileSync('src/renderer/assets/unityhub.png','dist/renderer/assets/unityhub.png');\"",
     "start": "npm run build && electron .",
-    "dev": "npm run start"
+    "dev": "npm run start",
+    "package:win": "npm run build && electron-builder --win portable --publish never"
   },
   "author": "",
   "license": "MIT",
-  "dependencies": {
-    "electron": "^37.6.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^24.4.0",
+    "electron": "^37.6.0",
+    "electron-builder": "^26.0.12",
     "typescript": "^5.9.2"
+  },
+  "build": {
+    "appId": "com.hannesdelbeke.electronunityhub",
+    "productName": "Electron Unity Hub",
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "projects.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        "portable"
+      ]
+    }
   }
 }
