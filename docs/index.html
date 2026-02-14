@@ -3,20 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Unity Launcher</title>
+  <title>Electron Unity Hub Demo</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <main class="app">
     <section class="toolbar">
-      <h1>Projects</h1>
+      <h1>Projects <span class="badge">Demo</span></h1>
       <input id="search" type="search" placeholder="Search projects" />
       <div class="add-wrap">
         <button id="add-toggle" class="btn">Add</button>
         <div id="add-menu" class="menu hidden">
           <button id="add-disk" class="menu-item">Add from disk</button>
           <button id="add-repo" class="menu-item">Add from repo</button>
-          <button id="add-hub" class="menu-item">Import from Hub</button>
         </div>
       </div>
       <button id="new-project" class="btn accent">New Project</button>
@@ -42,7 +41,7 @@
       <button id="launch-btn" class="btn">Launch / Focus</button>
       <button id="delete-btn" class="btn danger">Remove</button>
       <button id="refresh-btn" class="btn">Refresh</button>
-      <span id="status">Ready</span>
+      <span id="status">Demo mode with mock data</span>
     </section>
   </main>
 
@@ -50,19 +49,13 @@
     <form method="dialog" id="disk-form" class="modal-form">
       <h2>Add from disk</h2>
       <label>Project folder
-        <div class="input-row">
-          <input id="disk-path" type="text" required />
-          <button id="disk-browse-path" type="button" class="btn">Browse</button>
-        </div>
+        <input id="disk-path" type="text" required placeholder="D:/repos/my-game" />
       </label>
       <label>Nickname
         <input id="disk-nickname" type="text" placeholder="Optional" />
       </label>
       <label>Unity executable
-        <div class="input-row">
-          <input id="disk-unity-exe" type="text" placeholder="Optional" />
-          <button id="disk-browse-exe" type="button" class="btn">Browse</button>
-        </div>
+        <input id="disk-unity-exe" type="text" placeholder="Optional" />
       </label>
       <menu>
         <button value="cancel" class="btn">Cancel</button>
@@ -75,25 +68,16 @@
     <form method="dialog" id="repo-form" class="modal-form">
       <h2>Add from repo</h2>
       <label>Repository URL
-        <input id="repo-url" type="text" required />
+        <input id="repo-url" type="text" required placeholder="git@github.com:org/repo.git" />
       </label>
       <label>Branch (optional)
-        <input id="repo-branch" type="text" />
+        <input id="repo-branch" type="text" placeholder="feature/branch" />
       </label>
       <label>Clone to folder
-        <div class="input-row">
-          <input id="repo-target" type="text" required />
-          <button id="repo-browse-target" type="button" class="btn">Browse</button>
-        </div>
+        <input id="repo-target" type="text" required placeholder="D:/repos/project" />
       </label>
       <label>Nickname
         <input id="repo-nickname" type="text" placeholder="Optional" />
-      </label>
-      <label>Unity executable
-        <div class="input-row">
-          <input id="repo-unity-exe" type="text" placeholder="Optional" />
-          <button id="repo-browse-exe" type="button" class="btn">Browse</button>
-        </div>
       </label>
       <menu>
         <button value="cancel" class="btn">Cancel</button>
@@ -102,6 +86,6 @@
     </form>
   </dialog>
 
-  <script src="./renderer.js"></script>
+  <script src="./demo.js"></script>
 </body>
 </html>

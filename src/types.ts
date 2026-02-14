@@ -28,6 +28,7 @@ declare global {
       pickDirectory: () => Promise<string>;
       pickFile: () => Promise<string>;
       cloneRepo: (repoUrl: string, targetDir: string, branch: string) => Promise<{ ok: boolean; message: string }>;
+      importProjectsFromUnityHub: () => Promise<{ imported: number; total: number; source: string }>;
     };
   }
 }

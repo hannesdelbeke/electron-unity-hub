@@ -1,0 +1,50 @@
+﻿<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="720" fill="#f6f7f8"/>
+  <rect x="20" y="20" width="1240" height="680" rx="14" fill="#ffffff" stroke="#e2e5e9"/>
+  <text x="44" y="68" fill="#16181d" font-size="32" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Projects</text>
+  <rect x="210" y="38" width="560" height="38" rx="8" fill="#ffffff" stroke="#e2e5e9"/>
+  <text x="228" y="62" fill="#9aa1ab" font-size="16" font-family="Segoe UI, Arial, sans-serif">Search projects</text>
+  <rect x="786" y="38" width="84" height="38" rx="8" fill="#ffffff" stroke="#e2e5e9"/>
+  <text x="816" y="62" fill="#16181d" font-size="16" font-family="Segoe UI, Arial, sans-serif">Add</text>
+  <rect x="882" y="38" width="140" height="38" rx="8" fill="#1f9cf0"/>
+  <text x="910" y="62" fill="#ffffff" font-size="16" font-family="Segoe UI, Arial, sans-serif" font-weight="600">New Project</text>
+
+  <rect x="38" y="96" width="1204" height="548" rx="10" fill="#ffffff" stroke="#e2e5e9"/>
+  <rect x="38" y="96" width="1204" height="42" rx="10" fill="#fafbfc"/>
+
+  <text x="58" y="122" fill="#6b7280" font-size="14" font-family="Segoe UI, Arial, sans-serif">Nickname</text>
+  <text x="212" y="122" fill="#6b7280" font-size="14" font-family="Segoe UI, Arial, sans-serif">Project</text>
+  <text x="358" y="122" fill="#6b7280" font-size="14" font-family="Segoe UI, Arial, sans-serif">Path</text>
+  <text x="756" y="122" fill="#6b7280" font-size="14" font-family="Segoe UI, Arial, sans-serif">Editor Version</text>
+  <text x="916" y="122" fill="#6b7280" font-size="14" font-family="Segoe UI, Arial, sans-serif">Source Control</text>
+  <text x="1088" y="122" fill="#6b7280" font-size="14" font-family="Segoe UI, Arial, sans-serif">Modified</text>
+
+  <rect x="38" y="138" width="1204" height="42" fill="#eaf5ff"/>
+  <line x1="38" y1="180" x2="1242" y2="180" stroke="#edf0f2"/>
+  <line x1="38" y1="222" x2="1242" y2="222" stroke="#edf0f2"/>
+  <line x1="38" y1="264" x2="1242" y2="264" stroke="#edf0f2"/>
+
+  <text x="58" y="164" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">Main</text>
+  <text x="212" y="164" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">space-rpg</text>
+  <text x="358" y="164" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">D:/repos/space-rpg</text>
+  <text x="756" y="164" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">6000.0.31f1</text>
+  <text x="916" y="164" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">Git main (clean)</text>
+  <text x="1088" y="164" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">2026-02-14</text>
+
+  <text x="58" y="206" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">Feature UI</text>
+  <text x="212" y="206" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">space-rpg</text>
+  <text x="358" y="206" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">D:/repos/space-rpg-ui</text>
+  <text x="756" y="206" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">6000.0.31f1</text>
+  <text x="916" y="206" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">Git feature/ui (dirty)</text>
+  <text x="1088" y="206" fill="#16181d" font-size="14" font-family="Segoe UI, Arial, sans-serif">2026-02-13</text>
+
+  <rect x="38" y="654" width="1204" height="30" fill="#ffffff"/>
+  <rect x="54" y="650" width="132" height="30" rx="8" fill="#ffffff" stroke="#e2e5e9"/>
+  <text x="73" y="670" fill="#16181d" font-size="13" font-family="Segoe UI, Arial, sans-serif">Launch / Focus</text>
+  <rect x="194" y="650" width="90" height="30" rx="8" fill="#ffffff" stroke="#f0c8c8"/>
+  <text x="220" y="670" fill="#ad2a2a" font-size="13" font-family="Segoe UI, Arial, sans-serif">Remove</text>
+  <rect x="292" y="650" width="84" height="30" rx="8" fill="#ffffff" stroke="#e2e5e9"/>
+  <text x="315" y="670" fill="#16181d" font-size="13" font-family="Segoe UI, Arial, sans-serif">Refresh</text>
+
+  <text x="980" y="670" fill="#6b7280" font-size="13" font-family="Segoe UI, Arial, sans-serif">Loaded 3 projects</text>
+</svg>

@@ -14,4 +14,5 @@ contextBridge.exposeInMainWorld("launcherApi", {
   pickFile: () => ipcRenderer.invoke("dialog:pickFile"),
   cloneRepo: (repoUrl: string, targetDir: string, branch: string) =>
     ipcRenderer.invoke("repo:clone", repoUrl, targetDir, branch),
+  importProjectsFromUnityHub: () => ipcRenderer.invoke("unityhub:importProjects"),
 });
