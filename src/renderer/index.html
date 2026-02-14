@@ -1,0 +1,106 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unity Launcher</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app">
+    <section class="toolbar">
+      <h1>Projects</h1>
+      <input id="search" type="search" placeholder="Search projects" />
+      <div class="add-wrap">
+        <button id="add-toggle" class="btn">Add</button>
+        <div id="add-menu" class="menu hidden">
+          <button id="add-disk" class="menu-item">Add from disk</button>
+          <button id="add-repo" class="menu-item">Add from repo</button>
+        </div>
+      </div>
+      <button id="new-project" class="btn accent">New Project</button>
+    </section>
+
+    <section class="projects-panel">
+      <table id="projects-table">
+        <thead>
+          <tr>
+            <th>Nickname</th>
+            <th>Project</th>
+            <th>Path</th>
+            <th>Editor Version</th>
+            <th>Source Control</th>
+            <th>Modified / Last Opened</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="footer-actions">
+      <button id="launch-btn" class="btn">Launch / Focus</button>
+      <button id="delete-btn" class="btn danger">Remove</button>
+      <button id="refresh-btn" class="btn">Refresh</button>
+      <span id="status">Ready</span>
+    </section>
+  </main>
+
+  <dialog id="disk-dialog" class="modal">
+    <form method="dialog" id="disk-form" class="modal-form">
+      <h2>Add from disk</h2>
+      <label>Project folder
+        <div class="input-row">
+          <input id="disk-path" type="text" required />
+          <button id="disk-browse-path" type="button" class="btn">Browse</button>
+        </div>
+      </label>
+      <label>Nickname
+        <input id="disk-nickname" type="text" placeholder="Optional" />
+      </label>
+      <label>Unity executable
+        <div class="input-row">
+          <input id="disk-unity-exe" type="text" placeholder="Optional" />
+          <button id="disk-browse-exe" type="button" class="btn">Browse</button>
+        </div>
+      </label>
+      <menu>
+        <button value="cancel" class="btn">Cancel</button>
+        <button id="disk-save" value="default" class="btn accent">Add project</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="repo-dialog" class="modal">
+    <form method="dialog" id="repo-form" class="modal-form">
+      <h2>Add from repo</h2>
+      <label>Repository URL
+        <input id="repo-url" type="text" required />
+      </label>
+      <label>Branch (optional)
+        <input id="repo-branch" type="text" />
+      </label>
+      <label>Clone to folder
+        <div class="input-row">
+          <input id="repo-target" type="text" required />
+          <button id="repo-browse-target" type="button" class="btn">Browse</button>
+        </div>
+      </label>
+      <label>Nickname
+        <input id="repo-nickname" type="text" placeholder="Optional" />
+      </label>
+      <label>Unity executable
+        <div class="input-row">
+          <input id="repo-unity-exe" type="text" placeholder="Optional" />
+          <button id="repo-browse-exe" type="button" class="btn">Browse</button>
+        </div>
+      </label>
+      <menu>
+        <button value="cancel" class="btn">Cancel</button>
+        <button id="repo-save" value="default" class="btn accent">Clone and add</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="./renderer.js"></script>
+</body>
+</html>
