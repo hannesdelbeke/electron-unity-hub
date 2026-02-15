@@ -427,12 +427,14 @@ function createWindow(): void {
     height: 760,
     show: false,
     backgroundColor: bgColor,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+  win.setMenuBarVisibility(false);
 
   const htmlPath = path.join(__dirname, "renderer", "index.html");
   win.loadFile(htmlPath);

@@ -22,6 +22,15 @@ type UnityInstall = {
 };
 
 type ThemePreference = "system" | "dark" | "light";
+type SortDirection = "asc" | "desc";
+type ProjectSortKey = "displayName" | "path" | "unityVersion" | "vcs" | "lastOpenedIso" | "status";
+type InstallSortKey = "version" | "path" | "source" | "status";
+
+type ProjectTableRow = {
+  project: ProjectEntry;
+  vcs: VcsStatus;
+  isMissing: boolean;
+};
 
 const tbody = document.querySelector<HTMLTableSectionElement>("#projects-table tbody");
 const installsTbody = document.querySelector<HTMLTableSectionElement>("#installs-table tbody");
@@ -60,6 +69,8 @@ let projects: ProjectEntry[] = [];
 let installs: UnityInstall[] = [];
 let selectedId = "";
 let searchText = "";
+let projectSort: { key: ProjectSortKey; direction: SortDirection } = { key: "lastOpenedIso", direction: "desc" };
+let installSort: { key: InstallSortKey; direction: SortDirection } = { key: "version", direction: "asc" };
 
 const defaultUnityExeKey = "unityLauncher.defaultUnityExe";
 const themePreferenceKey = "unityLauncher.themePreference";
@@ -108,6 +119,37 @@ function formatLastOpened(iso: string): string {
 
 function warningLabel(missing: boolean): string {
   return missing ? "<span class=\"warning-pill\">Missing</span>" : "";
+}
+
+function compareValues(left: string | number | boolean, right: string | number | boolean): number {
+  if (typeof left === "number" && typeof right === "number") {
+    return left - right;
+  }
+  if (typeof left === "boolean" && typeof right === "boolean") {
+    return Number(left) - Number(right);
+  }
+  return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: "base" });
+}
+
+function parseTimestamp(iso: string): number {
+  if (!iso) {
+    return 0;
+  }
+  const ts = Date.parse(iso);
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function updateSortHeaderIndicators(tableId: "projects-table" | "installs-table", key: string, direction: SortDirection): void {
+  const headers = document.querySelectorAll<HTMLTableCellElement>(`#${tableId} thead th.sortable`);
+  headers.forEach((header) => {
+    const label = header.dataset.label ?? header.textContent ?? "";
+    const sortKey = header.dataset.sort ?? "";
+    if (sortKey === key) {
+      header.textContent = `${label} ${direction === "asc" ? "▲" : "▼"}`;
+    } else {
+      header.textContent = label;
+    }
+  });
 }
 
 function getDisplayName(project: ProjectEntry): string {
@@ -172,10 +214,59 @@ async function renderProjectsTable(): Promise<void> {
 
   tbody.innerHTML = "";
   const visible = getFilteredProjects();
-  const vcsByProject = await Promise.all(visible.map((project) => window.launcherApi.getVcsStatus(project.path)));
+  const rows: ProjectTableRow[] = await Promise.all(
+    visible.map(async (project) => {
+      const vcs = await window.launcherApi.getVcsStatus(project.path);
+      return {
+        project,
+        vcs,
+        isMissing: vcs.state === "missing path",
+      };
+    }),
+  );
 
-  for (let i = 0; i < visible.length; i += 1) {
-    const project = visible[i];
+  rows.sort((a, b) => {
+    let left: string | number | boolean;
+    let right: string | number | boolean;
+
+    switch (projectSort.key) {
+      case "displayName":
+        left = getDisplayName(a.project);
+        right = getDisplayName(b.project);
+        break;
+      case "path":
+        left = a.project.path;
+        right = b.project.path;
+        break;
+      case "unityVersion":
+        left = a.project.unityVersion;
+        right = b.project.unityVersion;
+        break;
+      case "vcs":
+        left = formatVcs(a.vcs);
+        right = formatVcs(b.vcs);
+        break;
+      case "lastOpenedIso":
+        left = parseTimestamp(a.project.lastOpenedIso);
+        right = parseTimestamp(b.project.lastOpenedIso);
+        break;
+      case "status":
+        left = a.isMissing;
+        right = b.isMissing;
+        break;
+      default:
+        left = 0;
+        right = 0;
+    }
+
+    const cmp = compareValues(left, right);
+    return projectSort.direction === "asc" ? cmp : -cmp;
+  });
+
+  updateSortHeaderIndicators("projects-table", projectSort.key, projectSort.direction);
+
+  for (const row of rows) {
+    const project = row.project;
     const tr = document.createElement("tr");
     tr.classList.add("clickable");
     tr.dataset.id = project.id;
@@ -183,8 +274,8 @@ async function renderProjectsTable(): Promise<void> {
       tr.classList.add("selected");
     }
 
-    const vcs = vcsByProject[i];
-    const isMissing = vcs.state === "missing path";
+    const vcs = row.vcs;
+    const isMissing = row.isMissing;
 
     const values: Array<string> = [
       getDisplayName(project),
@@ -224,7 +315,39 @@ function renderInstallsTable(): void {
   }
 
   installsTbody.innerHTML = "";
-  for (const install of installs) {
+  const sortedInstalls = [...installs].sort((a, b) => {
+    let left: string | number | boolean;
+    let right: string | number | boolean;
+
+    switch (installSort.key) {
+      case "version":
+        left = a.version;
+        right = b.version;
+        break;
+      case "path":
+        left = a.path;
+        right = b.path;
+        break;
+      case "source":
+        left = a.source;
+        right = b.source;
+        break;
+      case "status":
+        left = !a.exists;
+        right = !b.exists;
+        break;
+      default:
+        left = 0;
+        right = 0;
+    }
+
+    const cmp = compareValues(left, right);
+    return installSort.direction === "asc" ? cmp : -cmp;
+  });
+
+  updateSortHeaderIndicators("installs-table", installSort.key, installSort.direction);
+
+  for (const install of sortedInstalls) {
     const tr = document.createElement("tr");
     tr.classList.add("clickable");
 
@@ -367,6 +490,40 @@ function wireSidebarTabs(): void {
   tabSettings?.addEventListener("click", () => activateTab("settings"));
 }
 
+function wireSorting(): void {
+  const projectHeaders = document.querySelectorAll<HTMLTableCellElement>("#projects-table thead th.sortable");
+  projectHeaders.forEach((header) => {
+    header.addEventListener("click", () => {
+      const key = header.dataset.sort as ProjectSortKey | undefined;
+      if (!key) {
+        return;
+      }
+      if (projectSort.key === key) {
+        projectSort.direction = projectSort.direction === "asc" ? "desc" : "asc";
+      } else {
+        projectSort = { key, direction: key === "lastOpenedIso" ? "desc" : "asc" };
+      }
+      void renderProjectsTable();
+    });
+  });
+
+  const installHeaders = document.querySelectorAll<HTMLTableCellElement>("#installs-table thead th.sortable");
+  installHeaders.forEach((header) => {
+    header.addEventListener("click", () => {
+      const key = header.dataset.sort as InstallSortKey | undefined;
+      if (!key) {
+        return;
+      }
+      if (installSort.key === key) {
+        installSort.direction = installSort.direction === "asc" ? "desc" : "asc";
+      } else {
+        installSort = { key, direction: "asc" };
+      }
+      renderInstallsTable();
+    });
+  });
+}
+
 function wireGlobalEvents(): void {
   addToggle?.addEventListener("click", () => {
     addMenu?.classList.toggle("hidden");
@@ -499,6 +656,7 @@ function wireSettingsView(): void {
 async function init(): Promise<void> {
   try {
     wireSidebarTabs();
+    wireSorting();
     wireGlobalEvents();
     wireDiskDialog();
     wireRepoDialog();
