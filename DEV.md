@@ -101,6 +101,24 @@ Use this checklist after major UI or behavior updates:
 - Confirm README links/screenshots still match current behavior.
 - Confirm GitHub Actions build succeeds and produces downloadable app artifacts.
 
+## Preview Rendering
+
+Render launcher preview media from the live desktop app (not hand-authored SVG mockups).
+
+Required outputs:
+- `preview/launcher-preview.from-app.png` (raw app capture)
+- `preview/launcher-preview.svg` (SVG wrapper using the captured image)
+
+Recommended flow:
+
+1. Build latest app assets:
+   - `npm run build`
+2. Launch Electron via Playwright and capture the window:
+   - save PNG to `preview/launcher-preview.from-app.png`
+3. Generate `preview/launcher-preview.svg` from that PNG capture.
+4. Ensure the preview includes current major UI states when relevant (for example cloud rows when cloud integration changed).
+5. Update README preview reference only if path/filename changes.
+
 ## Commit Policy
 
 - Include a Codex co-author trailer on commits made with Codex assistance.

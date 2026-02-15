@@ -1,4 +1,4 @@
-﻿type ProjectEntry = {
+type ProjectEntry = {
   id: string;
   nickname: string;
   name: string;
@@ -6,6 +6,9 @@
   unityVersion: string;
   unityExe: string;
   lastOpenedIso: string;
+  cloudRepo?: string;
+  cloneUrl?: string;
+  repoSizeBytes?: number;
 };
 
 type VcsStatus = {
@@ -29,7 +32,7 @@ type UnityInstall = {
 type ThemePreference = "system" | "dark" | "light";
 type StatusTone = "success" | "warning" | "error" | "info";
 type SortDirection = "asc" | "desc";
-type ProjectSortKey = "displayName" | "path" | "unityVersion" | "vcs" | "branchOrStream" | "lastOpenedIso" | "status";
+type ProjectSortKey = "displayName" | "path" | "unityVersion" | "vcs" | "branchOrStream" | "lastOpenedIso" | "sizeBytes" | "status";
 type InstallSortKey = "version" | "path" | "source" | "status";
 
 type ProjectTableRow = {
@@ -37,6 +40,11 @@ type ProjectTableRow = {
   vcs: VcsStatus;
   isMissing: boolean;
   isOpen: boolean;
+  isCloud: boolean;
+  isInstalled: boolean;
+  remoteUrl: string;
+  modifiedIso: string;
+  sizeBytes: number;
   iconDataUrl: string;
 };
 
@@ -53,6 +61,7 @@ const addMenuInstalls = document.getElementById("add-menu-installs") as HTMLDivE
 const diskDialog = document.getElementById("disk-dialog") as HTMLDialogElement | null;
 const repoDialog = document.getElementById("repo-dialog") as HTMLDialogElement | null;
 const projectSettingsDialog = document.getElementById("project-settings-dialog") as HTMLDialogElement | null;
+const githubTokenDialog = document.getElementById("github-token-dialog") as HTMLDialogElement | null;
 
 const diskPath = document.getElementById("disk-path") as HTMLInputElement | null;
 const diskNickname = document.getElementById("disk-nickname") as HTMLInputElement | null;
@@ -69,6 +78,11 @@ const settingsTheme = document.getElementById("settings-theme") as HTMLSelectEle
 const settingsDisableRenderThrottling =
   document.getElementById("settings-disable-render-throttling") as HTMLInputElement | null;
 const projectSettingsNickname = document.getElementById("project-settings-nickname") as HTMLInputElement | null;
+const githubTokenInput = document.getElementById("github-token-input") as HTMLInputElement | null;
+const settingsGithubStatus = document.getElementById("settings-github-status");
+const settingsGhInstallBtn = document.getElementById("settings-gh-install") as HTMLButtonElement | null;
+const settingsGhInstalledBtn = document.getElementById("settings-gh-installed") as HTMLButtonElement | null;
+const settingsGhLabel = document.getElementById("settings-gh-label");
 
 const tabProjects = document.getElementById("tab-projects");
 const tabInstalls = document.getElementById("tab-installs");
@@ -79,6 +93,7 @@ const viewInstalls = document.getElementById("view-installs");
 const viewSettings = document.getElementById("view-settings");
 
 let projects: ProjectEntry[] = [];
+let cloudProjects: ProjectEntry[] = [];
 let installs: UnityInstall[] = [];
 let selectedId = "";
 let searchText = "";
@@ -187,12 +202,29 @@ function activateTab(tab: TabName): void {
   viewSettings?.classList.toggle("active", tab === "settings");
 }
 
+function svgIcon(name: "warning" | "arrowDown" | "arrowUp" | "dot" | "moreHorizontal"): string {
+  switch (name) {
+    case "warning":
+      return "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 9v4m0 4h.01M10.29 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.71-3.14l-8-14a2 2 0 0 0-3.42 0z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
+    case "arrowDown":
+      return "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 5v14m0 0-5-5m5 5 5-5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
+    case "arrowUp":
+      return "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 19V5m0 0-5 5m5-5 5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
+    default:
+      return "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"2.5\" fill=\"currentColor\"/></svg>";
+  }
+}
+
+function metricWithIcon(icon: "arrowDown" | "arrowUp" | "dot", value: string | number, title: string): string {
+  return `<span class="vcs-metric" title="${title}"><span class="vcs-metric-icon">${svgIcon(icon)}</span><span>${value}</span></span>`;
+}
+
 function formatVcsText(vcs: VcsStatus): string {
   if (vcs.kind === "None") {
     return "None";
   }
   const warn = vcs.conflictCount > 0 ? " clash" : "";
-  return `${vcs.kind} (${vcs.state}) ↓${vcs.incomingCount} ↑${vcs.outgoingCount} (${vcs.localChangesCount})${warn}`;
+  return `${vcs.kind} (${vcs.state}) down:${vcs.incomingCount} up:${vcs.outgoingCount} (${vcs.localChangesCount})${warn}`;
 }
 
 function formatVcsHtml(vcs: VcsStatus): string {
@@ -212,19 +244,18 @@ function formatVcsHtml(vcs: VcsStatus): string {
             ? "UnityVC"
             : "VC";
   const infoWarn = safeInfo
-    ? `<span class="vcs-warn vcs-info-warn" title="${safeInfo}">⚠</span>`
+    ? `<span class="vcs-warn vcs-info-warn" title="${safeInfo}">${svgIcon("warning")}</span>`
     : "";
   const conflictWarn = vcs.conflictCount > 0
-    ? `<span class="vcs-warn" title="Conflict/clash detected">⚠</span>`
+    ? `<span class="vcs-warn" title="Conflict/clash detected">${svgIcon("warning")}</span>`
     : "";
-  const incoming = `<span class="vcs-metric" title="Changes to pull">↓${vcs.incomingCount}</span>`;
+  const incoming = metricWithIcon("arrowDown", vcs.incomingCount, "Changes to pull");
   const outgoing = vcs.kind === "Git"
-    ? `<span class="vcs-metric" title="Changes to push">↑${vcs.outgoingCount}</span>`
+    ? metricWithIcon("arrowUp", vcs.outgoingCount, "Changes to push")
     : "";
-  const changed = `<span class="vcs-metric" title="Changed files">(${vcs.localChangesCount})</span>`;
+  const changed = metricWithIcon("dot", `(${vcs.localChangesCount})`, "Changed files");
   return `<div class="vcs-cell"><span class="vcs-kind">${icon}</span>${conflictWarn}${infoWarn}${incoming}${outgoing}${changed}</div>`;
 }
-
 function formatLastOpened(iso: string): string {
   if (!iso) {
     return "never";
@@ -239,12 +270,18 @@ function formatLastOpened(iso: string): string {
   });
 }
 
-function statusLabel(missing: boolean, isOpen: boolean): string {
+function statusLabel(missing: boolean, isOpen: boolean, isInstalled: boolean, isCloud: boolean): string {
   if (missing) {
     return "<span class=\"warning-pill\">Missing</span>";
   }
   if (isOpen) {
     return "<span class=\"open-pill\">Open</span>";
+  }
+  if (isInstalled) {
+    return "<span class=\"open-pill\">Installed</span>";
+  }
+  if (isCloud) {
+    return "<span class=\"cloud-pill\">Cloud</span>";
   }
   return "";
 }
@@ -291,7 +328,7 @@ function updateSortHeaderIndicators(tableId: "projects-table" | "installs-table"
     const label = header.dataset.label ?? header.textContent ?? "";
     const sortKey = header.dataset.sort ?? "";
     if (sortKey === key) {
-      header.textContent = `${label} ${direction === "asc" ? "▲" : "▼"}`;
+      header.textContent = `${label} ${direction === "asc" ? "^" : "v"}`;
     } else {
       header.textContent = label;
     }
@@ -311,7 +348,10 @@ function getFilteredProjects(): ProjectEntry[] {
   if (!q) {
     return projects;
   }
-  return projects.filter((p) => [getDisplayName(p), p.name, p.path, p.unityVersion].some((v) => v.toLowerCase().includes(q)));
+  return projects.filter((p) =>
+    [getDisplayName(p), p.name, p.path, p.unityVersion, p.cloudRepo ?? "", p.cloneUrl ?? ""]
+      .some((v) => v.toLowerCase().includes(q)),
+  );
 }
 
 function closeAddMenu(): void {
@@ -329,10 +369,14 @@ function openDialog(dialogEl: HTMLDialogElement | null): void {
 
 function closeProjectRowMenus(): void {
   openProjectMenuId = "";
+  document.querySelectorAll<HTMLElement>("#projects-table .row-menu").forEach((menu) => menu.classList.add("hidden"));
+  document.querySelectorAll<HTMLElement>("#projects-table tbody tr.menu-open").forEach((row) => row.classList.remove("menu-open"));
 }
 
 function closeInstallRowMenus(): void {
   openInstallMenuPath = "";
+  document.querySelectorAll<HTMLElement>("#installs-table .row-menu").forEach((menu) => menu.classList.add("hidden"));
+  document.querySelectorAll<HTMLElement>("#installs-table tbody tr.menu-open").forEach((row) => row.classList.remove("menu-open"));
 }
 
 function createProjectEntry(partial: Partial<ProjectEntry>): ProjectEntry {
@@ -344,6 +388,9 @@ function createProjectEntry(partial: Partial<ProjectEntry>): ProjectEntry {
     unityVersion: partial.unityVersion ?? "",
     unityExe: partial.unityExe ?? "",
     lastOpenedIso: partial.lastOpenedIso ?? "",
+    cloudRepo: partial.cloudRepo ?? "",
+    cloneUrl: partial.cloneUrl ?? "",
+    repoSizeBytes: partial.repoSizeBytes ?? 0,
   };
 }
 
@@ -456,6 +503,34 @@ async function launchProjectRow(project: ProjectEntry): Promise<void> {
   setStatus(result.message, tone, autoResetMs);
 }
 
+function mergeProjects(local: ProjectEntry[], cloud: ProjectEntry[]): ProjectEntry[] {
+  const localByCloudRepo = new Set(
+    local
+      .map((item) => (item.cloudRepo ?? "").trim().toLowerCase())
+      .filter((value) => value.length > 0),
+  );
+  const filteredCloud = cloud.filter((item) => {
+    const key = (item.cloudRepo ?? "").trim().toLowerCase();
+    return key ? !localByCloudRepo.has(key) : true;
+  });
+  return dedupeProjects([...local, ...filteredCloud]);
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const rounded = unitIndex === 0 ? value.toFixed(0) : value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2);
+  return `${rounded} ${units[unitIndex]}`;
+}
+
 function openProjectSettings(project: ProjectEntry): void {
   editingProjectId = project.id;
   if (projectSettingsNickname) {
@@ -465,7 +540,7 @@ function openProjectSettings(project: ProjectEntry): void {
 }
 
 async function removeProjectById(id: string): Promise<void> {
-  projects = await window.launcherApi.deleteProject(id);
+  const localProjects = await window.launcherApi.deleteProject(id);
   if (selectedId === id) {
     selectedId = "";
   }
@@ -473,6 +548,7 @@ async function removeProjectById(id: string): Promise<void> {
     editingProjectId = "";
     projectSettingsDialog?.close();
   }
+  projects = mergeProjects(dedupeProjects(localProjects), cloudProjects);
   await renderProjectsTable();
   setStatus("Project removed");
 }
@@ -487,16 +563,40 @@ async function renderProjectsTable(): Promise<void> {
   const rows: ProjectTableRow[] = await withActivity("Updating project info...", async () =>
     Promise.all(
       visible.map(async (project) => {
-        const [vcs, iconDataUrl, isOpen] = await Promise.all([
+        const hasLocalPath = project.path.trim().length > 0;
+        const isCloud = Boolean((project.cloudRepo ?? "").trim() || (project.cloneUrl ?? "").trim());
+        if (!hasLocalPath) {
+          return {
+            project,
+            vcs: { kind: "None", branchOrStream: "", state: "not detected", localChangesCount: 0, incomingCount: 0, outgoingCount: 0, conflictCount: 0 },
+            isMissing: false,
+            isOpen: false,
+            isCloud,
+            isInstalled: false,
+            remoteUrl: (project.cloneUrl ?? "").trim(),
+            modifiedIso: project.lastOpenedIso || "",
+            sizeBytes: Math.max(0, Number(project.repoSizeBytes ?? 0)),
+            iconDataUrl: "",
+          };
+        }
+        const [vcs, iconDataUrl, isOpen, remoteUrl, lastCommitIso, sizeBytes] = await Promise.all([
           window.launcherApi.getVcsStatus(project.path),
           window.launcherApi.getProjectIcon(project.path),
           window.launcherApi.isProjectOpen(project.path),
+          window.launcherApi.getProjectRemoteUrl(project.path),
+          window.launcherApi.getProjectLastCommitIso(project.path),
+          window.launcherApi.getProjectSizeBytes(project.path),
         ]);
         return {
           project,
           vcs,
           isMissing: vcs.state === "missing path",
           isOpen,
+          isCloud,
+          isInstalled: vcs.state !== "missing path",
+          remoteUrl,
+          modifiedIso: lastCommitIso || project.lastOpenedIso || "",
+          sizeBytes,
           iconDataUrl,
         };
       }),
@@ -529,16 +629,20 @@ async function renderProjectsTable(): Promise<void> {
         right = formatVcsText(b.vcs);
         break;
       case "branchOrStream":
-        left = a.vcs.branchOrStream || "";
-        right = b.vcs.branchOrStream || "";
+        left = a.vcs.branchOrStream || "-";
+        right = b.vcs.branchOrStream || "-";
         break;
       case "lastOpenedIso":
-        left = parseTimestamp(a.project.lastOpenedIso);
-        right = parseTimestamp(b.project.lastOpenedIso);
+        left = parseTimestamp(a.modifiedIso);
+        right = parseTimestamp(b.modifiedIso);
+        break;
+      case "sizeBytes":
+        left = a.sizeBytes;
+        right = b.sizeBytes;
         break;
       case "status":
-        left = a.isMissing ? 2 : a.isOpen ? 1 : 0;
-        right = b.isMissing ? 2 : b.isOpen ? 1 : 0;
+        left = a.isMissing ? 4 : a.isOpen ? 3 : a.isInstalled ? 2 : a.isCloud ? 1 : 0;
+        right = b.isMissing ? 4 : b.isOpen ? 3 : b.isInstalled ? 2 : b.isCloud ? 1 : 0;
         break;
       default:
         left = 0;
@@ -564,12 +668,19 @@ async function renderProjectsTable(): Promise<void> {
     const vcs = row.vcs;
     const isMissing = row.isMissing;
     const isOpen = row.isOpen;
+    const isCloud = row.isCloud;
+    const isInstalled = row.isInstalled;
+    const remoteUrl = row.remoteUrl.trim();
+    if (isCloud && !project.path.trim()) {
+      tr.classList.add("cloud-row");
+    }
 
     const values: Array<string> = [
-      project.path,
+      project.path || project.cloneUrl || project.cloudRepo || "",
       project.unityVersion,
-      formatLastOpened(project.lastOpenedIso),
-      statusLabel(isMissing, isOpen),
+      formatLastOpened(row.modifiedIso),
+      formatBytes(row.sizeBytes),
+      statusLabel(isMissing, isOpen, isInstalled, isCloud),
     ];
 
     const projectCell = document.createElement("td");
@@ -578,7 +689,9 @@ async function renderProjectsTable(): Promise<void> {
     const icon = document.createElement("img");
     icon.className = "project-icon";
     icon.alt = "";
-    icon.src = row.iconDataUrl || "./assets/unityhub.png";
+    icon.src = isCloud && !project.path.trim()
+      ? "./assets/cloud.svg"
+      : (row.iconDataUrl || "./assets/unityhub.png");
     const label = document.createElement("span");
     label.className = "cell-text";
     label.textContent = getDisplayName(project);
@@ -600,15 +713,19 @@ async function renderProjectsTable(): Promise<void> {
     tr.appendChild(vcsTd);
 
     const lastOpenedTd = document.createElement("td");
-    lastOpenedTd.appendChild(createCellContent(vcs.kind === "None" ? "" : (vcs.branchOrStream || "—")));
+    lastOpenedTd.appendChild(createCellContent(vcs.kind === "None" ? "" : (vcs.branchOrStream || "-")));
     tr.appendChild(lastOpenedTd);
 
     const modifiedTd = document.createElement("td");
     modifiedTd.appendChild(createCellContent(values[2]));
     tr.appendChild(modifiedTd);
 
+    const sizeTd = document.createElement("td");
+    sizeTd.appendChild(createCellContent(values[3]));
+    tr.appendChild(sizeTd);
+
     const statusTd = document.createElement("td");
-    statusTd.appendChild(createCellContent(values[3], true));
+    statusTd.appendChild(createCellContent(values[4], true));
     tr.appendChild(statusTd);
 
     const actionsTd = document.createElement("td");
@@ -618,18 +735,22 @@ async function renderProjectsTable(): Promise<void> {
     const actionsButton = document.createElement("button");
     actionsButton.className = "icon-btn row-action-btn";
     actionsButton.type = "button";
-    actionsButton.textContent = "…";
+    actionsButton.textContent = "...";
     actionsButton.setAttribute("aria-label", "Project actions");
-    actionsButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openProjectMenuId = openProjectMenuId === project.id ? "" : project.id;
-      void renderProjectsTable();
-    });
-    actionsWrap.appendChild(actionsButton);
-
     const rowMenu = document.createElement("div");
     rowMenu.className = `menu row-menu${openProjectMenuId === project.id ? "" : " hidden"}`;
     rowMenu.addEventListener("click", (event) => event.stopPropagation());
+    actionsButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const shouldOpen = openProjectMenuId !== project.id;
+      closeProjectRowMenus();
+      if (shouldOpen) {
+        openProjectMenuId = project.id;
+        tr.classList.add("menu-open");
+        rowMenu.classList.remove("hidden");
+      }
+    });
+    actionsWrap.appendChild(actionsButton);
 
     const settingsBtn = document.createElement("button");
     settingsBtn.className = "menu-item";
@@ -654,6 +775,38 @@ async function renderProjectsTable(): Promise<void> {
       void renderProjectsTable();
     });
 
+    const remoteBtn = document.createElement("button");
+    remoteBtn.className = "menu-item";
+    remoteBtn.type = "button";
+    remoteBtn.textContent = "Open Remote";
+    remoteBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      closeProjectRowMenus();
+      if (!remoteUrl) {
+        setStatus("Remote URL is missing.", "warning", 5000);
+        return;
+      }
+      const result = await window.launcherApi.openExternalUrl(remoteUrl);
+      setStatus(result.message, result.ok ? "success" : "error");
+    });
+
+    const cloneBtn = document.createElement("button");
+    cloneBtn.className = "menu-item";
+    cloneBtn.type = "button";
+    cloneBtn.textContent = "Clone";
+    cloneBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      closeProjectRowMenus();
+      const parentDir = await window.launcherApi.pickDirectory();
+      if (!parentDir) {
+        setStatus("Clone cancelled");
+        return;
+      }
+      const result = await withActivity("Cloning cloud project...", () => window.launcherApi.cloneCloudProject(project.id, parentDir));
+      setStatus(result.message, result.ok ? "success" : "error");
+      await refreshProjects(false);
+    });
+
     const removeBtn = document.createElement("button");
     removeBtn.className = "menu-item danger-item";
     removeBtn.type = "button";
@@ -661,11 +814,28 @@ async function renderProjectsTable(): Promise<void> {
     removeBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
       closeProjectRowMenus();
+      if (!project.path.trim()) {
+        cloudProjects = await window.launcherApi.deleteCloudProject(project.id);
+        projects = mergeProjects(projects.filter((item) => item.path.trim().length > 0), cloudProjects);
+        await renderProjectsTable();
+        setStatus("Cloud project removed");
+        return;
+      }
       await removeProjectById(project.id);
     });
 
-    rowMenu.appendChild(settingsBtn);
-    rowMenu.appendChild(browseBtn);
+    if (project.path.trim()) {
+      rowMenu.appendChild(settingsBtn);
+      rowMenu.appendChild(browseBtn);
+      if (remoteUrl) {
+        rowMenu.appendChild(remoteBtn);
+      }
+    } else {
+      rowMenu.appendChild(cloneBtn);
+      if (remoteUrl) {
+        rowMenu.appendChild(remoteBtn);
+      }
+    }
     rowMenu.appendChild(removeBtn);
     actionsWrap.appendChild(rowMenu);
     actionsTd.appendChild(actionsWrap);
@@ -677,6 +847,10 @@ async function renderProjectsTable(): Promise<void> {
         setStatus("Project path is missing");
         return;
       }
+      if (!project.path.trim()) {
+        setStatus("Project is only in cloud. Use Actions > Clone first.", "info", 6000);
+        return;
+      }
       await launchProjectRow(project);
     });
 
@@ -684,8 +858,13 @@ async function renderProjectsTable(): Promise<void> {
       event.preventDefault();
       selectedId = project.id;
       openInstallMenuPath = "";
-      openProjectMenuId = project.id;
-      void renderProjectsTable();
+      const shouldOpen = openProjectMenuId !== project.id;
+      closeProjectRowMenus();
+      if (shouldOpen) {
+        openProjectMenuId = project.id;
+        tr.classList.add("menu-open");
+        rowMenu.classList.remove("hidden");
+      }
     });
 
     fragment.appendChild(tr);
@@ -772,18 +951,22 @@ function renderInstallsTable(): void {
     const actionsButton = document.createElement("button");
     actionsButton.className = "icon-btn row-action-btn";
     actionsButton.type = "button";
-    actionsButton.textContent = "…";
+    actionsButton.textContent = "...";
     actionsButton.setAttribute("aria-label", "Install actions");
-    actionsButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openInstallMenuPath = openInstallMenuPath === install.path ? "" : install.path;
-      renderInstallsTable();
-    });
-    actionsWrap.appendChild(actionsButton);
-
     const rowMenu = document.createElement("div");
     rowMenu.className = `menu row-menu${openInstallMenuPath === install.path ? "" : " hidden"}`;
     rowMenu.addEventListener("click", (event) => event.stopPropagation());
+    actionsButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const shouldOpen = openInstallMenuPath !== install.path;
+      closeInstallRowMenus();
+      if (shouldOpen) {
+        openInstallMenuPath = install.path;
+        tr.classList.add("menu-open");
+        rowMenu.classList.remove("hidden");
+      }
+    });
+    actionsWrap.appendChild(actionsButton);
 
     const removeBtn = document.createElement("button");
     removeBtn.className = "menu-item danger-item";
@@ -828,8 +1011,13 @@ function renderInstallsTable(): void {
     tr.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       openProjectMenuId = "";
-      openInstallMenuPath = install.path;
-      renderInstallsTable();
+      const shouldOpen = openInstallMenuPath !== install.path;
+      closeInstallRowMenus();
+      if (shouldOpen) {
+        openInstallMenuPath = install.path;
+        tr.classList.add("menu-open");
+        rowMenu.classList.remove("hidden");
+      }
     });
 
     installsTbody.appendChild(tr);
@@ -837,7 +1025,12 @@ function renderInstallsTable(): void {
 }
 
 async function refreshProjects(updateStatus = true): Promise<void> {
-  projects = dedupeProjects(await window.launcherApi.getProjects());
+  const [localProjects, remoteCloudProjects] = await Promise.all([
+    window.launcherApi.getProjects(),
+    window.launcherApi.getCloudProjects(),
+  ]);
+  cloudProjects = dedupeProjects(remoteCloudProjects);
+  projects = mergeProjects(dedupeProjects(localProjects), cloudProjects);
   await renderProjectsTable();
   if (updateStatus) {
     setStatus(`Loaded ${projects.length} projects`);
@@ -876,7 +1069,8 @@ async function saveProject(project: ProjectEntry): Promise<void> {
   if (existing && !project.lastOpenedIso) {
     project.lastOpenedIso = existing.lastOpenedIso;
   }
-  projects = await window.launcherApi.saveProject(project);
+  const localProjects = await window.launcherApi.saveProject(project);
+  projects = mergeProjects(dedupeProjects(localProjects), cloudProjects);
   await renderProjectsTable();
 }
 
@@ -1016,11 +1210,6 @@ function wireGlobalEvents(): void {
     if (!target.closest(".row-actions")) {
       closeProjectRowMenus();
       closeInstallRowMenus();
-      if (viewProjects?.classList.contains("active")) {
-        void renderProjectsTable();
-      } else if (viewInstalls?.classList.contains("active")) {
-        renderInstallsTable();
-      }
     }
   });
 
@@ -1139,6 +1328,75 @@ function wireSettingsView(): void {
     await refreshProjects(false);
     setStatus(`Removed ${result.removed} missing projects`);
   });
+
+  const refreshGitHubStatus = async (): Promise<void> => {
+    const [status, gh] = await Promise.all([
+      window.launcherApi.getGitHubAuthStatus(),
+      window.launcherApi.getGhStatus(),
+    ]);
+    if (settingsGithubStatus) {
+      if (status.connected) {
+        const source = status.source === "gh" ? "gh" : "token";
+        settingsGithubStatus.textContent = `Connected as ${status.login} (${source})`;
+      } else {
+        settingsGithubStatus.textContent = "GitHub not connected.";
+      }
+    }
+    if (settingsGhLabel) {
+      settingsGhLabel.textContent = gh.installed
+        ? (gh.authenticated ? `Installed, authenticated as ${gh.login}.` : "Installed. Run `gh auth login` or use token below.")
+        : gh.installHint;
+    }
+    if (settingsGhInstallBtn) {
+      settingsGhInstallBtn.style.display = gh.installed ? "none" : "";
+      settingsGhInstallBtn.disabled = gh.installed;
+    }
+    if (settingsGhInstalledBtn) {
+      settingsGhInstalledBtn.style.display = gh.installed ? "" : "none";
+      settingsGhInstalledBtn.disabled = !gh.installed;
+    }
+  };
+
+  void refreshGitHubStatus();
+
+  settingsGhInstallBtn?.addEventListener("click", async () => {
+    const result = await window.launcherApi.openGhInstall();
+    setStatus(`Opened GH CLI install page. ${result.message}`, "info", 7000);
+    await refreshGitHubStatus();
+  });
+
+  document.getElementById("settings-github-connect")?.addEventListener("click", () => {
+    githubTokenDialog?.showModal();
+  });
+
+  document.getElementById("github-token-save")?.addEventListener("click", async () => {
+    const token = requireValue(githubTokenInput);
+    if (!token) {
+      setStatus("GitHub token is required", "warning");
+      return;
+    }
+    const result = await withActivity("Connecting GitHub...", () => window.launcherApi.setGitHubToken(token));
+    if (result.ok && githubTokenInput) {
+      githubTokenInput.value = "";
+      githubTokenDialog?.close();
+    }
+    setStatus(result.message, result.ok ? "success" : "error");
+    await refreshGitHubStatus();
+  });
+
+  document.getElementById("settings-github-disconnect")?.addEventListener("click", async () => {
+    await window.launcherApi.clearGitHubToken();
+    await refreshGitHubStatus();
+    setStatus("GitHub disconnected");
+  });
+
+  document.getElementById("settings-github-refresh-cloud")?.addEventListener("click", async () => {
+    const result = await withActivity("Fetching cloud projects...", () => window.launcherApi.discoverCloudProjects());
+    setStatus(result.message, result.ok ? "success" : "error");
+    if (result.ok) {
+      await refreshProjects(false);
+    }
+  });
 }
 
 function wireProjectSettingsDialog(): void {
@@ -1186,3 +1444,6 @@ async function init(): Promise<void> {
 }
 
 void init();
+
+
+

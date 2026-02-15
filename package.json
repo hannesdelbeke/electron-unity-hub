@@ -4,7 +4,7 @@
   "description": "Lightweight Unity project launcher",
   "main": "dist/app.js",
   "scripts": {
-    "build": "tsc && node -e \"const fs=require('fs');fs.mkdirSync('dist/renderer/assets',{recursive:true});fs.copyFileSync('src/renderer/index.html','dist/renderer/index.html');fs.copyFileSync('src/renderer/styles.css','dist/renderer/styles.css');fs.copyFileSync('src/renderer/assets/unityhub.png','dist/renderer/assets/unityhub.png');\"",
+    "build": "tsc && node -e \"const fs=require('fs');fs.mkdirSync('dist/renderer/assets',{recursive:true});fs.copyFileSync('src/renderer/index.html','dist/renderer/index.html');fs.copyFileSync('src/renderer/styles.css','dist/renderer/styles.css');fs.copyFileSync('src/renderer/assets/unityhub.png','dist/renderer/assets/unityhub.png');fs.copyFileSync('src/renderer/assets/cloud.svg','dist/renderer/assets/cloud.svg');\"",
     "build:pages": "npm run build && node scripts/build-pages.mjs",
     "start": "npm run build && electron .",
     "dev": "npm run start",

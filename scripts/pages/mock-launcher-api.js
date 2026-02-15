@@ -1,7 +1,9 @@
 (function () {
   const projectsKey = "pages.projects";
+  const cloudProjectsKey = "pages.cloudProjects";
   const installsKey = "pages.installs";
   const settingsKey = "pages.settings";
+  const githubKey = "pages.githubAuth";
 
   function nowIso() {
     return new Date().toISOString();
@@ -44,6 +46,23 @@
         unityVersion: "2022.3.63f1",
         unityExe: "D:/Unity/2022.3.63f1/Editor/Unity.exe",
         lastOpenedIso: "2026-02-13T19:15:00.000Z",
+      },
+    ];
+  }
+
+  function seedCloudProjects() {
+    return [
+      {
+        id: "github:demo/studio-cloud-game",
+        nickname: "studio-cloud-game",
+        name: "studio-cloud-game",
+        path: "",
+        unityVersion: "6000.0.43f1",
+        unityExe: "",
+        lastOpenedIso: "2026-02-15T08:22:00.000Z",
+        cloudRepo: "demo/studio-cloud-game",
+        cloneUrl: "https://github.com/demo/studio-cloud-game.git",
+        repoSizeBytes: 2.4 * 1024 * 1024 * 1024,
       },
     ];
   }
@@ -91,13 +110,36 @@
     return seeded;
   }
 
+  function getCloudProjects() {
+    const cloud = readJson(cloudProjectsKey, null);
+    if (cloud) return cloud;
+    const seeded = seedCloudProjects();
+    writeJson(cloudProjectsKey, seeded);
+    return seeded;
+  }
+
+  function saveCloudProjects(projects) {
+    writeJson(cloudProjectsKey, projects);
+  }
+
   function getSettings() {
     return readJson(settingsKey, { disableRenderThrottling: true });
+  }
+
+  function getGitHub() {
+    return readJson(githubKey, { connected: false, login: "" });
+  }
+
+  function saveGitHub(value) {
+    writeJson(githubKey, value);
   }
 
   window.launcherApi = {
     async getProjects() {
       return getProjects();
+    },
+    async getCloudProjects() {
+      return getCloudProjects();
     },
     async saveProject(project) {
       const current = getProjects();
@@ -115,6 +157,28 @@
       const next = getProjects().filter((item) => item.id !== id);
       saveProjects(next);
       return next;
+    },
+    async deleteCloudProject(id) {
+      const next = getCloudProjects().filter((item) => item.id !== id);
+      saveCloudProjects(next);
+      return next;
+    },
+    async cloneCloudProject(projectId, parentDir) {
+      const cloud = getCloudProjects();
+      const target = cloud.find((item) => item.id === projectId);
+      if (!target) return { ok: false, message: "Cloud project not found.", projects: getProjects() };
+      const folder = (target.name || "project").replace(/[<>:\"/\\\\|?*]+/g, "_");
+      const clonedPath = `${parentDir}/${folder}`;
+      const local = {
+        ...target,
+        id: randomId(),
+        path: clonedPath,
+        lastOpenedIso: nowIso(),
+      };
+      const projects = [...getProjects(), local];
+      saveProjects(projects);
+      saveCloudProjects(cloud.filter((item) => item.id !== projectId));
+      return { ok: true, message: "Demo: cloned cloud project.", projects };
     },
     async removeMissingProjects() {
       const before = getProjects();
@@ -169,6 +233,24 @@
     async getProjectIcon() {
       return "./assets/unityhub.png";
     },
+    async getProjectRemoteUrl(projectPath) {
+      const value = (projectPath || "").toLowerCase();
+      if (value.includes("space")) return "https://github.com/demo/space-rpg";
+      if (value.includes("missing")) return "https://github.com/demo/studio-game";
+      return "";
+    },
+    async getProjectLastCommitIso(projectPath) {
+      const value = (projectPath || "").toLowerCase();
+      if (!value) return "";
+      if (value.includes("missing")) return "";
+      return "2026-02-14T21:10:00.000Z";
+    },
+    async getProjectSizeBytes(projectPath) {
+      const value = (projectPath || "").toLowerCase();
+      if (value.includes("space")) return 12 * 1024 * 1024 * 1024;
+      if (value.includes("missing")) return 0;
+      return 850 * 1024 * 1024;
+    },
     async launchOrFocus(project) {
       const current = getProjects();
       const next = current.map((item) =>
@@ -183,6 +265,10 @@
     async browseTo(targetPath) {
       if (!targetPath) return { ok: false, message: "Path is required." };
       return { ok: true, message: `Demo: would browse to ${targetPath}` };
+    },
+    async openExternalUrl(targetUrl) {
+      if (!targetUrl) return { ok: false, message: "Remote URL is missing." };
+      return { ok: true, message: `Demo: would open ${targetUrl}` };
     },
     async pickDirectory() {
       return window.prompt("Mock folder path", "D:/repos/new-project") || "";
@@ -200,6 +286,52 @@
     async setDisableRenderThrottling(value) {
       writeJson(settingsKey, { ...getSettings(), disableRenderThrottling: !!value });
       return { ok: true };
+    },
+    async getGitHubAuthStatus() {
+      const info = getGitHub();
+      return {
+        ghInstalled: true,
+        ghAuthenticated: !!info.connected,
+        connected: !!info.connected,
+        login: info.login || "",
+        source: info.connected ? "gh" : "none",
+        installHint: "Install with Homebrew/winget/apt from cli.github.com",
+        installUrl: "https://cli.github.com/",
+        message: info.connected ? "Connected" : "Not connected",
+      };
+    },
+    async setGitHubToken(token) {
+      if (!token || token.trim().length < 4) {
+        return { ok: false, message: "Token is invalid." };
+      }
+      saveGitHub({ connected: true, login: "demo-user" });
+      return { ok: true, message: "Connected as demo-user." };
+    },
+    async clearGitHubToken() {
+      saveGitHub({ connected: false, login: "" });
+      return { ok: true };
+    },
+    async discoverCloudProjects() {
+      const gh = getGitHub();
+      if (!gh.connected) {
+        return { ok: false, message: "GitHub is not connected.", projects: [] };
+      }
+      const projects = getCloudProjects();
+      return { ok: true, message: `Discovered ${projects.length} cloud Unity projects.`, projects };
+    },
+    async getGhStatus() {
+      const gh = getGitHub();
+      return {
+        installed: true,
+        authenticated: !!gh.connected,
+        login: gh.login || "",
+        installHint: "Install from cli.github.com",
+        installUrl: "https://cli.github.com/",
+        message: gh.connected ? "Authenticated" : "Not authenticated",
+      };
+    },
+    async openGhInstall() {
+      return { ok: true, message: "Install with your OS package manager or from cli.github.com", url: "https://cli.github.com/" };
     },
   };
 })();

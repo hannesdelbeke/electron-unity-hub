@@ -215,32 +215,34 @@ select {
 }
 
 .side-tab:hover {
-  background: var(--sidebar-hover);
+  background: color-mix(in srgb, var(--sidebar-hover) 70%, #ffffff);
 }
 
 .side-tab.active {
-  background: var(--sidebar-active);
+  background: color-mix(in srgb, var(--sidebar-active) 78%, #ffffff);
   box-shadow: none;
 }
 
 .tab-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
   color: var(--text);
-  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  background: transparent;
   border: 0;
 }
 
+.tab-icon svg {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
+
 .side-tab.active .tab-icon {
-  color: #fff;
-  background: var(--accent);
+  color: var(--text);
+  background: transparent;
 }
 
 .tab-label {
@@ -411,6 +413,7 @@ td {
 }
 
 td.actions-cell {
+  position: relative;
   overflow: visible;
 }
 
@@ -424,10 +427,17 @@ td.actions-cell {
 }
 
 #projects-table th[data-sort="status"],
-#projects-table td:nth-child(7) {
+#projects-table td:nth-child(8) {
   width: 92px;
   min-width: 92px;
   max-width: 92px;
+}
+
+#projects-table th[data-sort="sizeBytes"],
+#projects-table td:nth-child(7) {
+  width: 96px;
+  min-width: 96px;
+  max-width: 96px;
 }
 
 #projects-table th:first-child,
@@ -443,6 +453,13 @@ th {
   background: var(--header-bg);
   position: sticky;
   top: 0;
+  z-index: 120;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 110;
 }
 
 tr.clickable {
@@ -451,6 +468,19 @@ tr.clickable {
 
 tr.clickable:hover {
   background: var(--row-hover);
+}
+
+tr.menu-open {
+  position: relative;
+  z-index: 2200;
+}
+
+tr.cloud-row {
+  opacity: 0.68;
+}
+
+tr.cloud-row:hover {
+  opacity: 0.88;
 }
 
 tr.selected {
@@ -509,12 +539,38 @@ tr.selected {
   color: var(--muted);
   font-size: 12px;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vcs-metric-icon {
+  width: 12px;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vcs-metric-icon svg {
+  width: 12px;
+  height: 12px;
+  display: block;
 }
 
 .vcs-warn {
   color: var(--warning-text);
-  font-size: 14px;
-  line-height: 1;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vcs-warn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .project-icon {
@@ -614,7 +670,8 @@ tr.selected {
 }
 
 .add-wrap { position: relative; }
-.row-actions { position: relative; display: flex; justify-content: flex-end; }
+.row-actions { position: relative; display: flex; justify-content: flex-end; z-index: 1; }
+.row-actions:has(.row-menu:not(.hidden)) { z-index: 2000; }
 
 .icon-btn {
   border: 1px solid var(--line);
@@ -674,7 +731,7 @@ tr.selected {
   border-radius: 8px;
   box-shadow: var(--menu-shadow);
   padding: 6px;
-  z-index: 10;
+  z-index: 2100;
   -webkit-app-region: no-drag;
 }
 
@@ -719,6 +776,17 @@ tr.selected {
   border: 1px solid color-mix(in srgb, var(--status-success) 45%, var(--line));
   background: color-mix(in srgb, var(--status-success) 18%, transparent);
   color: var(--status-success);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cloud-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, #fff);
+  background: color-mix(in srgb, var(--panel-alt) 74%, transparent);
+  color: var(--muted);
   font-size: 11px;
   font-weight: 600;
 }
