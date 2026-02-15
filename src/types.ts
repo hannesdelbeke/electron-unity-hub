@@ -76,7 +76,17 @@ declare global {
         installUrl: string;
         message: string;
       }>;
+      getGitLabAuthStatus: () => Promise<{
+        glabInstalled: boolean;
+        glabAuthenticated: boolean;
+        connected: boolean;
+        login: string;
+        installHint: string;
+        installUrl: string;
+        message: string;
+      }>;
       discoverCloudProjects: () => Promise<{ ok: boolean; message: string; projects: ProjectEntry[] }>;
+      discoverGitLabCloudProjects: () => Promise<{ ok: boolean; message: string; projects: ProjectEntry[] }>;
       getGhStatus: () => Promise<{
         installed: boolean;
         authenticated: boolean;
@@ -86,6 +96,23 @@ declare global {
         message: string;
       }>;
       openGhInstall: () => Promise<{ ok: boolean; message: string; url: string }>;
+      getDependencyStatus: () => Promise<{
+        gitInstalled: boolean;
+        ghInstalled: boolean;
+        ghAuthenticated: boolean;
+        ghLogin: string;
+        glabInstalled: boolean;
+        glabAuthenticated: boolean;
+        glabLogin: string;
+        hubInstalled: boolean;
+      }>;
+      getGitInstallGuide: () => Promise<{ command: string; url: string; message: string }>;
+      getGhInstallGuide: () => Promise<{ command: string; url: string; message: string }>;
+      startGhAuth: () => Promise<{ ok: boolean; message: string }>;
+      getGlabInstallGuide: () => Promise<{ command: string; url: string; message: string }>;
+      startGlabInstall: () => Promise<{ ok: boolean; message: string }>;
+      startGlabAuth: () => Promise<{ ok: boolean; message: string }>;
+      getHubInstallGuide: () => Promise<{ command: string; url: string; message: string }>;
     };
   }
 }

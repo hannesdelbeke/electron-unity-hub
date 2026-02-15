@@ -58,6 +58,7 @@ type ActionResult = {
 const tbody = document.querySelector<HTMLTableSectionElement>("#projects-table tbody");
 const installsTbody = document.querySelector<HTMLTableSectionElement>("#installs-table tbody");
 const statusEl = document.getElementById("status");
+const settingsStatusEl = document.getElementById("settings-status");
 const searchInput = document.getElementById("search") as HTMLInputElement | null;
 const searchInstallsInput = document.getElementById("search-installs") as HTMLInputElement | null;
 const addToggle = document.getElementById("add-toggle") as HTMLButtonElement | null;
@@ -88,10 +89,32 @@ const settingsAutoGetLatestDefault =
   document.getElementById("settings-auto-get-latest-default") as HTMLInputElement | null;
 const projectSettingsNickname = document.getElementById("project-settings-nickname") as HTMLInputElement | null;
 const projectSettingsAutoGetLatest = document.getElementById("project-settings-auto-get-latest") as HTMLInputElement | null;
-const settingsGithubStatus = document.getElementById("settings-github-status");
+const settingsGitInstallBtn = document.getElementById("settings-git-install") as HTMLButtonElement | null;
 const settingsGhInstallBtn = document.getElementById("settings-gh-install") as HTMLButtonElement | null;
-const settingsGhInstalledBtn = document.getElementById("settings-gh-installed") as HTMLButtonElement | null;
-const settingsGhLabel = document.getElementById("settings-gh-label");
+const settingsGhAuthBtn = document.getElementById("settings-gh-auth") as HTMLButtonElement | null;
+const settingsGithubRefreshBtn = document.getElementById("settings-github-refresh-cloud") as HTMLButtonElement | null;
+const settingsGlabInstallBtn = document.getElementById("settings-glab-install") as HTMLButtonElement | null;
+const settingsGlabAuthBtn = document.getElementById("settings-glab-auth") as HTMLButtonElement | null;
+const settingsGitlabRefreshBtn = document.getElementById("settings-gitlab-refresh-cloud") as HTMLButtonElement | null;
+const settingsHubInstallBtn = document.getElementById("settings-hub-install") as HTMLButtonElement | null;
+const settingsGhInstalledLine = document.getElementById("settings-gh-installed-line");
+const settingsGhConnectedLine = document.getElementById("settings-gh-connected-line");
+const settingsGhConnectedText = document.getElementById("settings-gh-connected-text");
+const settingsGlabInstalledLine = document.getElementById("settings-glab-installed-line");
+const settingsGlabConnectedLine = document.getElementById("settings-glab-connected-line");
+const settingsGlabConnectedText = document.getElementById("settings-glab-connected-text");
+const settingsGitInstalledLine = document.getElementById("settings-git-installed-line");
+const settingsHubInstalledLine = document.getElementById("settings-hub-installed-line");
+const settingsGitMissingLine = document.getElementById("settings-git-missing-line");
+const settingsGhMissingLine = document.getElementById("settings-gh-missing-line");
+const settingsGhAuthMissingLine = document.getElementById("settings-gh-auth-missing-line");
+const settingsGlabMissingLine = document.getElementById("settings-glab-missing-line");
+const settingsGlabAuthMissingLine = document.getElementById("settings-glab-auth-missing-line");
+const settingsHubMissingLine = document.getElementById("settings-hub-missing-line");
+const settingsGitInstallLoading = document.getElementById("settings-git-install-loading");
+const settingsGhInstallLoading = document.getElementById("settings-gh-install-loading");
+const settingsHubInstallLoading = document.getElementById("settings-hub-install-loading");
+const settingsGlabInstallLoading = document.getElementById("settings-glab-install-loading");
 
 const tabProjects = document.getElementById("tab-projects");
 const tabInstalls = document.getElementById("tab-installs");
@@ -133,6 +156,20 @@ const customInstallsKey = "unityLauncher.customInstalls";
 
 type TabName = "projects" | "installs" | "settings";
 
+function statusTargets(): HTMLElement[] {
+  return [statusEl, settingsStatusEl].filter((x): x is HTMLElement => Boolean(x));
+}
+
+function currentStatusTarget(): HTMLElement | null {
+  if (viewSettings?.classList.contains("active") && settingsStatusEl) {
+    return settingsStatusEl;
+  }
+  if (statusEl) {
+    return statusEl;
+  }
+  return settingsStatusEl ?? null;
+}
+
 function setStatus(msg: string, tone: StatusTone = "success", autoResetMs = 0): void {
   const normalizedMessage = msg.replace(/\s+/g, " ").trim();
   statusSetToken += 1;
@@ -141,21 +178,24 @@ function setStatus(msg: string, tone: StatusTone = "success", autoResetMs = 0): 
     clearTimeout(statusResetTimer);
     statusResetTimer = null;
   }
-  if (statusEl) {
-    statusEl.textContent = normalizedMessage;
-    statusEl.classList.remove("status-success", "status-warning", "status-error", "status-info", "status-loading");
-    statusEl.classList.add(`status-${tone}`);
-    if (autoResetMs > 0) {
-      statusResetTimer = setTimeout(() => {
-        if (!statusEl || tokenAtSet !== statusSetToken) {
-          return;
-        }
-        statusEl.textContent = "Ready";
-        statusEl.classList.remove("status-success", "status-warning", "status-error", "status-info", "status-loading");
-        statusEl.classList.add("status-info");
-        statusResetTimer = null;
-      }, autoResetMs);
-    }
+  const targets = statusTargets();
+  targets.forEach((target) => {
+    target.textContent = normalizedMessage;
+    target.classList.remove("status-success", "status-warning", "status-error", "status-info", "status-loading");
+    target.classList.add(`status-${tone}`);
+  });
+  if (autoResetMs > 0) {
+    statusResetTimer = setTimeout(() => {
+      if (tokenAtSet !== statusSetToken) {
+        return;
+      }
+      statusTargets().forEach((target) => {
+        target.textContent = "Ready";
+        target.classList.remove("status-success", "status-warning", "status-error", "status-info", "status-loading");
+        target.classList.add("status-info");
+      });
+      statusResetTimer = null;
+    }, autoResetMs);
   }
 }
 
@@ -165,8 +205,9 @@ function setActionStatus(result: ActionResult, successAutoResetMs = 4000, errorA
 
 async function withActivity<T>(message: string, task: () => Promise<T>): Promise<T> {
   activeStatusActivities += 1;
-  const previousText = statusEl?.textContent ?? "";
-  const previousClassName = statusEl?.className ?? "";
+  const target = currentStatusTarget();
+  const previousText = target?.textContent ?? "";
+  const previousClassName = target?.className ?? "";
   let shown = false;
   let timerCompleted = false;
 
@@ -179,10 +220,10 @@ async function withActivity<T>(message: string, task: () => Promise<T>): Promise
     statusLoadingVisible = true;
     statusLoadingRestoreText = previousText;
     statusLoadingRestoreClassName = previousClassName;
-    if (statusEl) {
-      statusEl.textContent = message;
-      statusEl.classList.remove("status-success", "status-warning", "status-error", "status-info", "status-loading");
-      statusEl.classList.add("status-info", "status-loading");
+    if (target) {
+      target.textContent = message;
+      target.classList.remove("status-success", "status-warning", "status-error", "status-info", "status-loading");
+      target.classList.add("status-info", "status-loading");
     }
   }, 300);
 
@@ -194,9 +235,9 @@ async function withActivity<T>(message: string, task: () => Promise<T>): Promise
       shown = false;
     }
     activeStatusActivities = Math.max(0, activeStatusActivities - 1);
-    if (statusEl && shown && activeStatusActivities === 0 && statusEl.classList.contains("status-loading")) {
-      statusEl.textContent = statusLoadingRestoreText;
-      statusEl.className = statusLoadingRestoreClassName;
+    if (target && shown && activeStatusActivities === 0 && target.classList.contains("status-loading")) {
+      target.textContent = statusLoadingRestoreText;
+      target.className = statusLoadingRestoreClassName;
       statusLoadingVisible = false;
     }
     if (activeStatusActivities === 0) {
@@ -1506,7 +1547,10 @@ function wireSidebarTabs(): void {
     activateTab("installs");
     await refreshInstalls(false);
   });
-  tabSettings?.addEventListener("click", () => activateTab("settings"));
+  tabSettings?.addEventListener("click", () => {
+    activateTab("settings");
+    document.dispatchEvent(new CustomEvent("settings:refresh-dependencies"));
+  });
 }
 
 function wireSorting(): void {
@@ -1544,6 +1588,8 @@ function wireSorting(): void {
 }
 
 function wireGlobalEvents(): void {
+  const windowBar = document.querySelector<HTMLElement>(".window-bar");
+
   addToggle?.addEventListener("click", () => {
     addMenu?.classList.toggle("hidden");
     addMenuInstalls?.classList.add("hidden");
@@ -1566,6 +1612,12 @@ function wireGlobalEvents(): void {
       closeProjectRowMenus();
       closeInstallRowMenus();
     }
+  });
+
+  windowBar?.addEventListener("mousedown", () => {
+    closeAddMenu();
+    closeProjectRowMenus();
+    closeInstallRowMenus();
   });
 
   searchInput?.addEventListener("input", () => {
@@ -1678,6 +1730,7 @@ function wireSettingsView(): void {
     const file = await window.launcherApi.pickFile();
     if (file && settingsDefaultUnityExe) {
       settingsDefaultUnityExe.value = file;
+      void persistSettings(true);
     }
   });
 
@@ -1685,10 +1738,11 @@ function wireSettingsView(): void {
     const dir = await window.launcherApi.pickDirectory();
     if (dir && settingsDefaultCloneDir) {
       settingsDefaultCloneDir.value = dir;
+      void persistSettings(true);
     }
   });
 
-  document.getElementById("settings-save")?.addEventListener("click", () => {
+  const persistSettings = async (showStatus = false): Promise<void> => {
     localStorage.setItem(defaultUnityExeKey, requireValue(settingsDefaultUnityExe));
     localStorage.setItem(defaultCloneDirKey, requireValue(settingsDefaultCloneDir));
     localStorage.setItem(autoGetLatestDefaultKey, String(settingsAutoGetLatestDefault?.checked ?? false));
@@ -1696,9 +1750,24 @@ function wireSettingsView(): void {
     localStorage.setItem(themePreferenceKey, pref);
     applyTheme(pref);
     const disableRenderThrottling = settingsDisableRenderThrottling?.checked ?? true;
-    void window.launcherApi.setDisableRenderThrottling(disableRenderThrottling);
-    setStatus("Settings saved. Restart app to apply render throttling change.");
-  });
+    await window.launcherApi.setDisableRenderThrottling(disableRenderThrottling);
+    if (showStatus) {
+      setStatus("Settings auto-saved.", "success", 1800);
+    }
+  };
+
+  const onAutoSaveChange = (): void => {
+    void persistSettings(true);
+  };
+
+  settingsTheme?.addEventListener("change", onAutoSaveChange);
+  settingsDisableRenderThrottling?.addEventListener("change", onAutoSaveChange);
+  settingsAutoGetLatestDefault?.addEventListener("change", onAutoSaveChange);
+  settingsDefaultUnityExe?.addEventListener("change", onAutoSaveChange);
+  settingsDefaultCloneDir?.addEventListener("change", onAutoSaveChange);
+  settingsDefaultUnityExe?.addEventListener("input", () => void persistSettings(false));
+  settingsDefaultCloneDir?.addEventListener("input", () => void persistSettings(false));
+  void persistSettings(false);
 
   document.getElementById("settings-remove-missing")?.addEventListener("click", async () => {
     const result = await window.launcherApi.removeMissingProjects();
@@ -1712,37 +1781,223 @@ function wireSettingsView(): void {
     setActionStatus(result, 5000, 7000);
   });
 
-  const refreshGitHubStatus = async (): Promise<void> => {
-    const [status, gh] = await Promise.all([
-      window.launcherApi.getGitHubAuthStatus(),
-      window.launcherApi.getGhStatus(),
-    ]);
-    if (settingsGithubStatus) {
-      settingsGithubStatus.textContent = status.connected
-        ? `Connected as ${status.login} (gh)`
-        : "GitHub not connected. Run `gh auth login`.";
-    }
-    if (settingsGhLabel) {
-      settingsGhLabel.textContent = gh.installed
-        ? (gh.authenticated ? `Installed, authenticated as ${gh.login}.` : "Installed. Run `gh auth login`.")
-        : gh.installHint;
-    }
-    if (settingsGhInstallBtn) {
-      settingsGhInstallBtn.style.display = gh.installed ? "none" : "";
-      settingsGhInstallBtn.disabled = gh.installed;
-    }
-    if (settingsGhInstalledBtn) {
-      settingsGhInstalledBtn.style.display = gh.installed ? "" : "none";
-      settingsGhInstalledBtn.disabled = !gh.installed;
+  const copyText = async (value: string): Promise<boolean> => {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      return false;
     }
   };
 
-  void refreshGitHubStatus();
+  const runGuideAction = async (
+    guide: { command: string; url: string; message: string },
+    statusPrefix: string,
+  ): Promise<void> => {
+    const copied = await copyText(guide.command);
+    const openResult = await window.launcherApi.openExternalUrl(guide.url);
+    if (!openResult.ok) {
+      setStatus(`${statusPrefix}. ${guide.message}`, "warning", 9000);
+      return;
+    }
+    const copiedMsg = copied ? " Command copied to clipboard." : ` Command: ${guide.command}`;
+    setStatus(`${statusPrefix}.${copiedMsg} Opened help page.`, "info", 10000);
+  };
+
+  const runInstallAction = async (
+    button: HTMLButtonElement | null,
+    spinner: HTMLElement | null,
+    message: string,
+    action: () => Promise<void>,
+  ): Promise<void> => {
+    if (!button) {
+      return;
+    }
+    const previousDisabled = button.disabled;
+    button.disabled = true;
+    spinner?.classList.remove("hidden");
+    try {
+      await withActivity(message, action);
+    } finally {
+      spinner?.classList.add("hidden");
+      button.disabled = previousDisabled;
+    }
+  };
+
+  const refreshDependencyStatus = async (): Promise<void> => {
+    const [deps, auth, gitlabAuth] = await Promise.all([
+      window.launcherApi.getDependencyStatus(),
+      window.launcherApi.getGitHubAuthStatus(),
+      window.launcherApi.getGitLabAuthStatus(),
+    ]);
+
+    if (settingsGhInstallBtn) {
+      settingsGhInstallBtn.classList.toggle("hidden", deps.ghInstalled);
+    }
+    settingsGhMissingLine?.classList.toggle("hidden", deps.ghInstalled);
+    settingsGhInstalledLine?.classList.toggle("hidden", !deps.ghInstalled);
+
+    if (settingsGhAuthBtn) {
+      settingsGhAuthBtn.disabled = !deps.ghInstalled;
+    }
+    if (settingsGithubRefreshBtn) {
+      settingsGithubRefreshBtn.disabled = !deps.ghAuthenticated;
+    }
+    settingsGhAuthMissingLine?.classList.toggle("hidden", deps.ghAuthenticated || !deps.ghInstalled);
+    settingsGhConnectedLine?.classList.toggle("hidden", !deps.ghAuthenticated);
+    if (settingsGhConnectedText) {
+      settingsGhConnectedText.textContent = `Connected as ${deps.ghLogin || auth.login || "unknown"} (gh).`;
+    }
+
+    if (settingsHubInstallBtn) {
+      settingsHubInstallBtn.classList.toggle("hidden", deps.hubInstalled);
+    }
+    settingsHubMissingLine?.classList.toggle("hidden", deps.hubInstalled);
+    settingsHubInstalledLine?.classList.toggle("hidden", !deps.hubInstalled);
+
+    if (settingsGitInstallBtn) {
+      settingsGitInstallBtn.classList.toggle("hidden", deps.gitInstalled);
+    }
+    settingsGitMissingLine?.classList.toggle("hidden", deps.gitInstalled);
+    settingsGitInstalledLine?.classList.toggle("hidden", !deps.gitInstalled);
+
+    if (settingsGlabInstallBtn) {
+      settingsGlabInstallBtn.classList.toggle("hidden", deps.glabInstalled);
+    }
+    settingsGlabMissingLine?.classList.toggle("hidden", deps.glabInstalled);
+    settingsGlabInstalledLine?.classList.toggle("hidden", !deps.glabInstalled);
+
+    if (settingsGlabAuthBtn) {
+      settingsGlabAuthBtn.disabled = !deps.glabInstalled;
+      settingsGlabAuthBtn.classList.toggle("hidden", deps.glabAuthenticated);
+    }
+    if (settingsGitlabRefreshBtn) {
+      settingsGitlabRefreshBtn.disabled = !deps.glabAuthenticated;
+    }
+    settingsGlabAuthMissingLine?.classList.toggle("hidden", deps.glabAuthenticated || !deps.glabInstalled);
+    settingsGlabConnectedLine?.classList.toggle("hidden", !deps.glabAuthenticated);
+    if (settingsGlabConnectedText) {
+      settingsGlabConnectedText.textContent = `Connected as ${deps.glabLogin || gitlabAuth.login || "unknown"} (glab).`;
+    }
+
+  };
+
+  document.addEventListener("settings:refresh-dependencies", () => {
+    void refreshDependencyStatus();
+  });
+  window.addEventListener("focus", () => {
+    if (viewSettings?.classList.contains("active")) {
+      void refreshDependencyStatus();
+    }
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && viewSettings?.classList.contains("active")) {
+      void refreshDependencyStatus();
+    }
+  });
+
+  void refreshDependencyStatus();
 
   settingsGhInstallBtn?.addEventListener("click", async () => {
-    const result = await window.launcherApi.openGhInstall();
-    setStatus(`Opened GH CLI install page. ${result.message}`, "info", 7000);
-    await refreshGitHubStatus();
+    await runInstallAction(
+      settingsGhInstallBtn,
+      settingsGhInstallLoading,
+      "Starting GitHub CLI install...",
+      async () => {
+        const guide = await window.launcherApi.getGhInstallGuide();
+        await runGuideAction(guide, "GH CLI install instructions");
+        await refreshDependencyStatus();
+      },
+    );
+  });
+
+  settingsGitInstallBtn?.addEventListener("click", async () => {
+    await runInstallAction(
+      settingsGitInstallBtn,
+      settingsGitInstallLoading,
+      "Starting Git install...",
+      async () => {
+        const guide = await window.launcherApi.getGitInstallGuide();
+        await runGuideAction(guide, "Git install instructions");
+        await refreshDependencyStatus();
+      },
+    );
+  });
+
+  settingsGhAuthBtn?.addEventListener("click", async () => {
+    if (settingsGhAuthBtn.disabled) {
+      return;
+    }
+    settingsGhAuthBtn.blur();
+    window.blur();
+    settingsGhAuthBtn.disabled = true;
+    const result = await window.launcherApi.startGhAuth();
+    if (!result.ok) {
+      setStatus(result.message, "warning", 9000);
+      settingsGhAuthBtn.disabled = false;
+      return;
+    }
+    setStatus(
+      "Started GH login in terminal. Choose GitHub.com + HTTPS + web login, copy the one-time code, open the shown URL, paste code, authorize, then return.",
+      "info",
+      15000,
+    );
+    await refreshDependencyStatus();
+    setTimeout(() => {
+      void refreshDependencyStatus();
+    }, 3500);
+  });
+
+  settingsHubInstallBtn?.addEventListener("click", async () => {
+    await runInstallAction(
+      settingsHubInstallBtn,
+      settingsHubInstallLoading,
+      "Starting Unity Hub install...",
+      async () => {
+        const guide = await window.launcherApi.getHubInstallGuide();
+        await runGuideAction(guide, "Unity Hub install instructions");
+        await refreshDependencyStatus();
+      },
+    );
+  });
+
+  settingsGlabInstallBtn?.addEventListener("click", async () => {
+    await runInstallAction(
+      settingsGlabInstallBtn,
+      settingsGlabInstallLoading,
+      "Starting GitLab CLI install...",
+      async () => {
+        settingsGlabInstallBtn.blur();
+        window.blur();
+        const result = await window.launcherApi.startGlabInstall();
+        setStatus(result.message, result.ok ? "info" : "warning", 10000);
+        await refreshDependencyStatus();
+      },
+    );
+  });
+
+  settingsGlabAuthBtn?.addEventListener("click", async () => {
+    if (settingsGlabAuthBtn.disabled) {
+      return;
+    }
+    settingsGlabAuthBtn.blur();
+    window.blur();
+    settingsGlabAuthBtn.disabled = true;
+    const result = await window.launcherApi.startGlabAuth();
+    if (!result.ok) {
+      setStatus(result.message, "warning", 9000);
+      settingsGlabAuthBtn.disabled = false;
+      return;
+    }
+    setStatus(
+      "Started GitLab login in terminal. Select gitlab.com + web login in the prompt, complete browser auth, then return.",
+      "info",
+      15000,
+    );
+    await refreshDependencyStatus();
+    setTimeout(() => {
+      void refreshDependencyStatus();
+    }, 3500);
   });
 
   document.getElementById("settings-github-refresh-cloud")?.addEventListener("click", async () => {
@@ -1750,6 +2005,16 @@ function wireSettingsView(): void {
     setActionStatus(result, 5000, 10000);
     if (result.ok) {
       await refreshProjects(false);
+      await refreshDependencyStatus();
+    }
+  });
+
+  document.getElementById("settings-gitlab-refresh-cloud")?.addEventListener("click", async () => {
+    const result = await withActivity("Fetching GitLab cloud projects...", () => window.launcherApi.discoverGitLabCloudProjects());
+    setActionStatus(result, 5000, 10000);
+    if (result.ok) {
+      await refreshProjects(false);
+      await refreshDependencyStatus();
     }
   });
 }

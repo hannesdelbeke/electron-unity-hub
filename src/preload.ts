@@ -33,7 +33,17 @@ contextBridge.exposeInMainWorld("launcherApi", {
   cloneRepo: (repoUrl: string, targetDir: string, branch: string) =>
     ipcRenderer.invoke("repo:clone", repoUrl, targetDir, branch),
   getGitHubAuthStatus: () => ipcRenderer.invoke("github:getAuthStatus"),
+  getGitLabAuthStatus: () => ipcRenderer.invoke("gitlab:getAuthStatus"),
   discoverCloudProjects: () => ipcRenderer.invoke("github:discoverCloudProjects"),
+  discoverGitLabCloudProjects: () => ipcRenderer.invoke("gitlab:discoverCloudProjects"),
   getGhStatus: () => ipcRenderer.invoke("gh:getStatus"),
   openGhInstall: () => ipcRenderer.invoke("gh:openInstall"),
+  getDependencyStatus: () => ipcRenderer.invoke("deps:getStatus"),
+  getGitInstallGuide: () => ipcRenderer.invoke("deps:getGitInstallGuide"),
+  getGhInstallGuide: () => ipcRenderer.invoke("deps:getGhInstallGuide"),
+  startGhAuth: () => ipcRenderer.invoke("deps:startGhAuth"),
+  getGlabInstallGuide: () => ipcRenderer.invoke("deps:getGlabInstallGuide"),
+  startGlabInstall: () => ipcRenderer.invoke("deps:startGlabInstall"),
+  startGlabAuth: () => ipcRenderer.invoke("deps:startGlabAuth"),
+  getHubInstallGuide: () => ipcRenderer.invoke("deps:getHubInstallGuide"),
 });

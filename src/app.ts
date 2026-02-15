@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import { execFile, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ProjectEntry, UnityInstall, VcsStatus } from "./types";
@@ -47,6 +47,22 @@ type GitHubUser = {
   login: string;
 };
 
+type GitLabRepo = {
+  id: number;
+  name: string;
+  path_with_namespace: string;
+  http_url_to_repo: string;
+  default_branch?: string;
+  last_activity_at?: string;
+  statistics?: {
+    repository_size?: number;
+  };
+};
+
+type GitLabUser = {
+  username: string;
+};
+
 function getGhInstallHint(): string {
   if (process.platform === "win32") {
     return "Install with winget: winget install --id GitHub.cli";
@@ -55,6 +71,76 @@ function getGhInstallHint(): string {
     return "Install with Homebrew: brew install gh";
   }
   return "Install with your package manager (apt/dnf/pacman) or from cli.github.com";
+}
+
+function getGlabInstallHint(): string {
+  if (process.platform === "win32") {
+    return "Install with winget: winget install --id GLab.GLab";
+  }
+  if (process.platform === "darwin") {
+    return "Install with Homebrew: brew install glab";
+  }
+  return "Install with your package manager (apt/dnf/pacman) or from gitlab.com/gitlab-org/cli";
+}
+
+function getHubInstallHint(): string {
+  if (process.platform === "win32") {
+    return "Install with winget: winget install --id Unity.UnityHub";
+  }
+  if (process.platform === "darwin") {
+    return "Install with Homebrew: brew install --cask unity-hub";
+  }
+  return "Install Unity Hub from unity.com or your distro package manager.";
+}
+
+function getGitInstallHint(): string {
+  if (process.platform === "win32") {
+    return "Install with winget: winget install --id Git.Git";
+  }
+  if (process.platform === "darwin") {
+    return "Install with Homebrew: brew install git";
+  }
+  return "Install with your package manager (apt/dnf/pacman).";
+}
+
+function installCommandForGh(): string {
+  if (process.platform === "win32") {
+    return "winget install --id GitHub.cli -e --source winget";
+  }
+  if (process.platform === "darwin") {
+    return "brew install gh";
+  }
+  return "echo \"Install GH CLI using your distro package manager (apt/dnf/pacman)\"";
+}
+
+function installCommandForGlab(): string {
+  if (process.platform === "win32") {
+    return "winget install --id GLab.GLab -e --source winget";
+  }
+  if (process.platform === "darwin") {
+    return "brew install glab";
+  }
+  return "echo \"Install GitLab CLI (glab) using your distro package manager (apt/dnf/pacman)\"";
+}
+
+function installCommandForHub(): string {
+  if (process.platform === "win32") {
+    return "winget install --id Unity.UnityHub -e --source winget";
+  }
+  if (process.platform === "darwin") {
+    return "brew install --cask unity-hub";
+  }
+  return "echo \"Install Unity Hub manually for Linux.\"";
+}
+
+function installCommandForGit(): string {
+  if (process.platform === "win32") {
+    return "winget install --id Git.Git -e --source winget";
+  }
+  if (process.platform === "darwin") {
+    return "brew install git";
+  }
+  return "echo \"Install Git using your distro package manager (apt/dnf/pacman)\"";
 }
 
 function normalizePath(inputPath: string): string {
@@ -450,6 +536,22 @@ function findHubFile(fileName: string): string {
   return "";
 }
 
+function isUnityHubInstalled(): boolean {
+  if (process.platform === "win32") {
+    const pf = process.env.ProgramFiles ?? "C:\\Program Files";
+    const local = process.env.LocalAppData ?? "";
+    const candidates = [
+      path.join(pf, "Unity Hub", "Unity Hub.exe"),
+      path.join(local, "Programs", "Unity Hub", "Unity Hub.exe"),
+    ];
+    return candidates.some((item) => existsSync(item)) || Boolean(findHubFile("projects-v1.json"));
+  }
+  if (process.platform === "darwin") {
+    return existsSync("/Applications/Unity Hub.app") || Boolean(findHubFile("projects-v1.json"));
+  }
+  return commandExists("unityhub") || existsSync("/usr/bin/unityhub") || Boolean(findHubFile("projects-v1.json"));
+}
+
 function importHubProjectsIntoStore(store: StoreShape): { added: number; hubFound: boolean } {
   let added = 0;
   let hubFound = false;
@@ -765,16 +867,50 @@ function getGhToken(): string {
   return result.stdout.trim();
 }
 
-async function getGhLogin(token: string): Promise<string> {
-  if (!token) {
+function getGlabToken(): string {
+  const glabExe = resolveGlabExecutable();
+  if (!glabExe) {
     return "";
   }
-  try {
-    const user = await githubRequest<GitHubUser>(token, "/user");
-    return user.login ?? "";
-  } catch {
-    return "";
+  const candidates = [
+    ["auth", "status", "--hostname", "gitlab.com", "--show-token"],
+    ["auth", "status", "--show-token"],
+  ];
+  for (const args of candidates) {
+    const result = runToolWithResult(glabExe, args);
+    if (result.status !== 0) {
+      continue;
+    }
+    const combinedOutput = `${result.stdout}\n${result.stderr}`;
+    const line = combinedOutput
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .find((item) => item.toLowerCase().includes("token found:"));
+    if (!line) {
+      continue;
+    }
+    const token = line.replace(/^✓\s*Token found:\s*/i, "").replace(/^Token found:\s*/i, "").trim();
+    if (token && !token.includes("*")) {
+      return token;
+    }
   }
+  return "";
+}
+
+function getGlabStatus(): { installed: boolean; authenticated: boolean; login: string } {
+  const glabExe = resolveGlabExecutable();
+  if (!glabExe) {
+    return { installed: false, authenticated: false, login: "" };
+  }
+  const result = runToolWithResult(glabExe, ["auth", "status", "--hostname", "gitlab.com"]);
+  const combined = `${result.stdout}\n${result.stderr}`;
+  const authenticated = result.status === 0 && /logged in to\s+gitlab\.com\s+as\s+/i.test(combined);
+  const loginMatch = combined.match(/logged in to\s+gitlab\.com\s+as\s+([^\s(]+)/i);
+  return {
+    installed: true,
+    authenticated,
+    login: loginMatch?.[1] ?? "",
+  };
 }
 
 function getEffectiveGitHubToken(): { token: string; source: "gh" | "none" } {
@@ -792,6 +928,30 @@ async function githubRequest<T>(token: string, endpoint: string): Promise<T> {
       Authorization: `Bearer ${token}`,
       "User-Agent": "electron-unity-hub",
       "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json() as { message?: string };
+      if (body.message) {
+        message = body.message;
+      }
+    } catch {
+      // Ignore parse error.
+    }
+    throw new Error(message);
+  }
+  return (await res.json()) as T;
+}
+
+async function gitlabRequest<T>(token: string, endpoint: string): Promise<T> {
+  const res = await fetch(`https://gitlab.com/api/v4${endpoint}`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "electron-unity-hub",
     },
   });
 
@@ -880,6 +1040,21 @@ async function fetchGitHubRepos(token: string): Promise<GitHubRepo[]> {
   return repos;
 }
 
+async function fetchGitLabRepos(token: string): Promise<GitLabRepo[]> {
+  const repos: GitLabRepo[] = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const batch = await gitlabRequest<GitLabRepo[]>(
+      token,
+      `/projects?membership=true&owned=true&simple=true&order_by=last_activity_at&sort=desc&per_page=100&page=${page}`,
+    );
+    repos.push(...batch);
+    if (batch.length < 100) {
+      break;
+    }
+  }
+  return repos;
+}
+
 async function fetchGitHubRepoMeta(
   token: string,
   repoFullName: string,
@@ -956,6 +1131,33 @@ async function discoverUnityCloudProjects(token: string): Promise<ProjectEntry[]
         cloudRepo: repo.full_name,
         cloneUrl: repo.clone_url,
         repoSizeBytes: Math.max(0, Number(repo.size ?? 0)) * 1024,
+      } as ProjectEntry;
+    },
+    6,
+  );
+  return dedupeCloudProjects(mapped.filter((item): item is ProjectEntry => item !== null));
+}
+
+async function discoverUnityGitLabCloudProjects(token: string): Promise<ProjectEntry[]> {
+  const repos = await fetchGitLabRepos(token);
+  const mapped = await mapWithConcurrency(
+    repos,
+    async (repo) => {
+      const unityVersion = await fetchUnityVersionFromGitLabRepo(token, repo);
+      if (!unityVersion) {
+        return null;
+      }
+      return {
+        id: `gitlab:${repo.path_with_namespace.toLowerCase()}`,
+        nickname: repo.name,
+        name: repo.name,
+        path: "",
+        unityVersion,
+        unityExe: "",
+        lastOpenedIso: repo.last_activity_at ?? "",
+        cloudRepo: repo.path_with_namespace,
+        cloneUrl: repo.http_url_to_repo,
+        repoSizeBytes: Math.max(0, Number(repo.statistics?.repository_size ?? 0)),
       } as ProjectEntry;
     },
     6,
@@ -1339,6 +1541,268 @@ function commandExists(cmd: string): boolean {
   const checker = process.platform === "win32" ? "where" : "which";
   const p = spawnSync(checker, [cmd], { encoding: "utf-8", timeout: 2000 });
   return p.status === 0;
+}
+
+function resolveGlabExecutable(): string {
+  if (process.platform === "win32") {
+    const whereResult = runToolWithResult("where", ["glab"]);
+    if (whereResult.status === 0 && whereResult.stdout.trim()) {
+      return whereResult.stdout.split(/\r?\n/)[0].trim();
+    }
+    const local = process.env.LocalAppData ?? "";
+    const candidates = [
+      path.join(local, "Programs", "glab", "glab.exe"),
+      path.join(local, "Programs", "GitLab CLI", "glab.exe"),
+      path.join("C:\\Program Files", "glab", "glab.exe"),
+      path.join("C:\\Program Files", "GitLab CLI", "glab.exe"),
+    ];
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+    return "";
+  }
+
+  if (commandExists("glab")) {
+    return "glab";
+  }
+  const unixCandidates = ["/usr/local/bin/glab", "/usr/bin/glab", "/opt/homebrew/bin/glab"];
+  for (const candidate of unixCandidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return "";
+}
+
+function startGhAuthLogin(): { ok: boolean; message: string } {
+  if (!commandExists("gh")) {
+    return { ok: false, message: "GitHub CLI is not installed. Install GH CLI first." };
+  }
+
+  try {
+    if (process.platform === "win32") {
+      const psCommand = "gh auth login";
+      spawn("cmd.exe", ["/c", "start", "", "powershell.exe", "-NoExit", "-Command", psCommand], {
+        detached: true,
+        windowsHide: false,
+        stdio: "ignore",
+      }).unref();
+      return { ok: true, message: "Opened and focused terminal for `gh auth login`." };
+    }
+
+    if (process.platform === "darwin") {
+      const script = "tell application \"Terminal\" to activate\ntell application \"Terminal\" to do script \"gh auth login\"";
+      spawn("osascript", ["-e", script], {
+        detached: true,
+        stdio: "ignore",
+      }).unref();
+      return { ok: true, message: "Opened and focused Terminal for `gh auth login`." };
+    }
+
+    const candidates: Array<{ cmd: string; args: string[] }> = [
+      { cmd: "x-terminal-emulator", args: ["-e", "bash -lc 'gh auth login; exec bash'"] },
+      { cmd: "gnome-terminal", args: ["--", "bash", "-lc", "gh auth login; exec bash"] },
+      { cmd: "konsole", args: ["-e", "bash", "-lc", "gh auth login; exec bash"] },
+      { cmd: "xterm", args: ["-e", "bash -lc 'gh auth login; exec bash'"] },
+    ];
+    for (const item of candidates) {
+      if (!commandExists(item.cmd)) {
+        continue;
+      }
+      spawn(item.cmd, item.args, {
+        detached: true,
+        stdio: "ignore",
+      }).unref();
+      return { ok: true, message: "Opened terminal and started `gh auth login`." };
+    }
+    return { ok: false, message: "No terminal app found. Run `gh auth login` manually." };
+  } catch (error) {
+    return { ok: false, message: `Failed to start GH auth: ${String(error)}` };
+  }
+}
+
+async function getGitLabAuthStatus(): Promise<{
+  glabInstalled: boolean;
+  glabAuthenticated: boolean;
+  connected: boolean;
+  login: string;
+  installHint: string;
+  installUrl: string;
+  message: string;
+}> {
+  const glabStatus = getGlabStatus();
+  const glabInstalled = glabStatus.installed;
+  const installHint = getGlabInstallHint();
+  const installUrl = "https://gitlab.com/gitlab-org/cli";
+  if (!glabStatus.authenticated) {
+    return {
+      glabInstalled,
+      glabAuthenticated: false,
+      connected: false,
+      login: glabStatus.login,
+      installHint,
+      installUrl,
+      message: glabInstalled ? "Not connected" : "GitLab CLI not installed",
+    };
+  }
+  return {
+    glabInstalled,
+    glabAuthenticated: true,
+    connected: true,
+    login: glabStatus.login,
+    installHint,
+    installUrl,
+    message: "Connected via GitLab CLI",
+  };
+}
+
+async function fetchGitLabRepoMeta(
+  token: string,
+  repoPathWithNamespace: string,
+): Promise<{ pushedAtIso: string; repoSizeBytes: number } | null> {
+  if (!repoPathWithNamespace.trim()) {
+    return null;
+  }
+  const repoEnc = encodeURIComponent(repoPathWithNamespace);
+  try {
+    const repo = await gitlabRequest<GitLabRepo>(token, `/projects/${repoEnc}?statistics=true`);
+    return {
+      pushedAtIso: repo.last_activity_at ?? "",
+      repoSizeBytes: Math.max(0, Number(repo.statistics?.repository_size ?? 0)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchUnityVersionFromGitLabRepo(token: string, repo: GitLabRepo): Promise<string> {
+  const ref = encodeURIComponent(repo.default_branch || "main");
+  const filePath = encodeURIComponent("ProjectSettings/ProjectVersion.txt");
+  try {
+    const res = await fetch(
+      `https://gitlab.com/api/v4/projects/${repo.id}/repository/files/${filePath}/raw?ref=${ref}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "User-Agent": "electron-unity-hub",
+        },
+      },
+    );
+    if (!res.ok) {
+      return "";
+    }
+    const text = await res.text();
+    return parseUnityVersionFromText(text);
+  } catch {
+    return "";
+  }
+}
+
+function startGlabAuthLogin(): { ok: boolean; message: string } {
+  const glabExe = resolveGlabExecutable();
+  if (!glabExe) {
+    return { ok: false, message: "GitLab CLI is not installed. Install GitLab CLI first." };
+  }
+  const glabCmd = process.platform === "win32" ? `"${glabExe}"` : glabExe;
+
+  try {
+    if (process.platform === "win32") {
+      const escaped = glabExe.replace(/'/g, "''");
+      const psCommand = `& '${escaped}' auth login`;
+      spawn("cmd.exe", ["/c", "start", "", "powershell.exe", "-NoExit", "-Command", psCommand], {
+        detached: true,
+        windowsHide: false,
+        stdio: "ignore",
+      }).unref();
+      return { ok: true, message: "Opened and focused terminal for `glab auth login`." };
+    }
+    if (process.platform === "darwin") {
+      const script = `tell application "Terminal" to activate\ntell application "Terminal" to do script "${glabCmd} auth login"`;
+      spawn("osascript", ["-e", script], { detached: true, stdio: "ignore" }).unref();
+      return { ok: true, message: "Opened and focused Terminal for `glab auth login`." };
+    }
+    const terminals = [
+      { cmd: "x-terminal-emulator", args: ["-e", `bash -lc '${glabCmd} auth login; exec bash'`] },
+      { cmd: "gnome-terminal", args: ["--", "bash", "-lc", `${glabCmd} auth login; exec bash`] },
+      { cmd: "konsole", args: ["-e", "bash", "-lc", `${glabCmd} auth login; exec bash`] },
+      { cmd: "xterm", args: ["-e", `bash -lc '${glabCmd} auth login; exec bash'`] },
+    ];
+    for (const terminal of terminals) {
+      if (!commandExists(terminal.cmd)) {
+        continue;
+      }
+      spawn(terminal.cmd, terminal.args, { detached: true, stdio: "ignore" }).unref();
+      return { ok: true, message: "Opened terminal and started `glab auth login`." };
+    }
+    return { ok: false, message: "No terminal app found. Run `glab auth login` manually." };
+  } catch (error) {
+    return { ok: false, message: `Failed to start GitLab auth: ${String(error)}` };
+  }
+}
+
+function startGlabInstall(): { ok: boolean; message: string } {
+  const linuxInstallCmd = "if command -v apt-get >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y glab; elif command -v dnf >/dev/null 2>&1; then sudo dnf install -y glab; elif command -v pacman >/dev/null 2>&1; then sudo pacman -S --noconfirm glab; else echo 'No supported package manager detected. Install from https://gitlab.com/gitlab-org/cli'; fi";
+  try {
+    if (process.platform === "win32") {
+      const script = [
+        "$ws = New-Object -ComObject WScript.Shell",
+        "$proc = Start-Process cmd.exe -ArgumentList '/k winget install --id GLab.GLab -e --source winget --accept-source-agreements --accept-package-agreements' -PassThru",
+        "Start-Sleep -Milliseconds 250",
+        "$null = $ws.AppActivate($proc.Id)",
+      ].join("; ");
+      spawn("powershell.exe", ["-NoProfile", "-Command", script], {
+        detached: true,
+        stdio: "ignore",
+      }).unref();
+      return { ok: true, message: "Opened terminal and started GitLab CLI install via winget." };
+    }
+    if (process.platform === "darwin") {
+      const script = "tell application \"Terminal\" to activate\ntell application \"Terminal\" to do script \"brew install glab\"";
+      spawn("osascript", ["-e", script], { detached: true, stdio: "ignore" }).unref();
+      return { ok: true, message: "Opened Terminal and started GitLab CLI install via Homebrew." };
+    }
+    const terminals = [
+      { cmd: "x-terminal-emulator", args: ["-e", `bash -lc '${linuxInstallCmd}; exec bash'`] },
+      { cmd: "gnome-terminal", args: ["--", "bash", "-lc", `${linuxInstallCmd}; exec bash`] },
+      { cmd: "konsole", args: ["-e", "bash", "-lc", `${linuxInstallCmd}; exec bash`] },
+      { cmd: "xterm", args: ["-e", `bash -lc '${linuxInstallCmd}; exec bash'`] },
+    ];
+    for (const terminal of terminals) {
+      if (!commandExists(terminal.cmd)) {
+        continue;
+      }
+      spawn(terminal.cmd, terminal.args, { detached: true, stdio: "ignore" }).unref();
+      return { ok: true, message: "Opened terminal and started GitLab CLI install." };
+    }
+    return { ok: false, message: "No terminal app found. Install GitLab CLI manually from https://gitlab.com/gitlab-org/cli" };
+  } catch (error) {
+    return { ok: false, message: `Failed to start GitLab CLI install: ${String(error)}` };
+  }
+}
+
+async function getDependencyStatus(): Promise<{
+  gitInstalled: boolean;
+  ghInstalled: boolean;
+  ghAuthenticated: boolean;
+  ghLogin: string;
+  glabInstalled: boolean;
+  glabAuthenticated: boolean;
+  glabLogin: string;
+  hubInstalled: boolean;
+}> {
+  const [gh, glab] = await Promise.all([getGitHubAuthStatus(), getGitLabAuthStatus()]);
+  return {
+    gitInstalled: commandExists("git"),
+    ghInstalled: gh.ghInstalled,
+    ghAuthenticated: gh.ghAuthenticated,
+    ghLogin: gh.login,
+    glabInstalled: glab.glabInstalled,
+    glabAuthenticated: glab.glabAuthenticated,
+    glabLogin: glab.login,
+    hubInstalled: isUnityHubInstalled(),
+  };
 }
 
 function projectTitleCandidates(project: ProjectEntry): string[] {
@@ -1869,8 +2333,9 @@ async function refreshCloudProjectMetadata(force = false): Promise<ProjectEntry[
     return current;
   }
 
-  const { token } = getEffectiveGitHubToken();
-  if (!token) {
+  const { token: githubToken } = getEffectiveGitHubToken();
+  const gitlabToken = getGlabToken();
+  if (!githubToken && !gitlabToken) {
     return current;
   }
 
@@ -1881,7 +2346,10 @@ async function refreshCloudProjectMetadata(force = false): Promise<ProjectEntry[
       if (!repo) {
         return item;
       }
-      const meta = await fetchGitHubRepoMeta(token, repo);
+      const source = item.id.startsWith("gitlab:") ? "gitlab" : "github";
+      const meta = source === "gitlab"
+        ? (gitlabToken ? await fetchGitLabRepoMeta(gitlabToken, repo) : null)
+        : (githubToken ? await fetchGitHubRepoMeta(githubToken, repo) : null);
       if (!meta) {
         return item;
       }
@@ -2117,6 +2585,7 @@ app.whenReady().then(() => {
     cloneRepository(repoUrl, targetDir, branch),
   );
   ipcMain.handle("github:getAuthStatus", async () => getGitHubAuthStatus());
+  ipcMain.handle("gitlab:getAuthStatus", async () => getGitLabAuthStatus());
   ipcMain.handle("github:discoverCloudProjects", async () => {
     const { token } = getEffectiveGitHubToken();
     if (!token) {
@@ -2127,10 +2596,11 @@ app.whenReady().then(() => {
       };
     }
     try {
+      const existing = getCloudProjects().filter((project) => !project.id.startsWith("github:"));
       const cloud = await discoverUnityCloudProjects(token);
-      const persisted = setCloudProjects(cloud);
+      const persisted = setCloudProjects([...existing, ...cloud]);
       await refreshCloudProjectMetadata(true);
-      return { ok: true, message: `Discovered ${persisted.length} cloud Unity projects.`, projects: persisted };
+      return { ok: true, message: `Discovered ${cloud.length} GitHub cloud Unity projects.`, projects: persisted };
     } catch (error) {
       return { ok: false, message: `GitHub discovery failed: ${String(error)}`, projects: [] as ProjectEntry[] };
     }
@@ -2146,6 +2616,49 @@ app.whenReady().then(() => {
       message: status.message,
     };
   });
+  ipcMain.handle("gitlab:discoverCloudProjects", async () => {
+    const token = getGlabToken();
+    if (!token) {
+      return {
+        ok: false,
+        message: "GitLab CLI auth is required. Run `glab auth login` first.",
+        projects: [] as ProjectEntry[],
+      };
+    }
+    try {
+      const existing = getCloudProjects().filter((project) => !project.id.startsWith("gitlab:"));
+      const cloud = await discoverUnityGitLabCloudProjects(token);
+      const persisted = setCloudProjects([...existing, ...cloud]);
+      await refreshCloudProjectMetadata(true);
+      return { ok: true, message: `Discovered ${cloud.length} GitLab cloud Unity projects.`, projects: persisted };
+    } catch (error) {
+      return { ok: false, message: `GitLab discovery failed: ${String(error)}`, projects: [] as ProjectEntry[] };
+    }
+  });
+  ipcMain.handle("deps:getStatus", async () => getDependencyStatus());
+  ipcMain.handle("deps:getGitInstallGuide", () => ({
+    command: installCommandForGit(),
+    url: "https://git-scm.com/downloads",
+    message: getGitInstallHint(),
+  }));
+  ipcMain.handle("deps:getGhInstallGuide", () => ({
+    command: installCommandForGh(),
+    url: "https://cli.github.com/",
+    message: getGhInstallHint(),
+  }));
+  ipcMain.handle("deps:startGhAuth", () => startGhAuthLogin());
+  ipcMain.handle("deps:getGlabInstallGuide", () => ({
+    command: installCommandForGlab(),
+    url: "https://gitlab.com/gitlab-org/cli",
+    message: getGlabInstallHint(),
+  }));
+  ipcMain.handle("deps:startGlabInstall", () => startGlabInstall());
+  ipcMain.handle("deps:startGlabAuth", () => startGlabAuthLogin());
+  ipcMain.handle("deps:getHubInstallGuide", () => ({
+    command: installCommandForHub(),
+    url: "https://unity.com/download",
+    message: getHubInstallHint(),
+  }));
   ipcMain.handle("gh:openInstall", () => {
     const url = "https://cli.github.com/";
     void shell.openExternal(url);
@@ -2166,4 +2679,5 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
 

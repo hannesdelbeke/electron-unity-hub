@@ -118,9 +118,9 @@
         <section class="settings-panel">
           <div class="settings-row">
             <label for="settings-default-unity-exe">Default Unity executable</label>
-            <div class="input-row">
+            <div class="input-row path-picker">
               <input id="settings-default-unity-exe" type="text" placeholder="Optional" />
-              <button id="settings-browse-exe" type="button" class="btn">Browse</button>
+              <button id="settings-browse-exe" type="button" class="btn browse-btn" aria-label="Browse executable" title="Browse executable">📁</button>
             </div>
           </div>
 
@@ -135,9 +135,9 @@
 
           <div class="settings-row">
             <label for="settings-default-clone-dir">Default clone folder</label>
-            <div class="input-row">
+            <div class="input-row path-picker">
               <input id="settings-default-clone-dir" type="text" placeholder="Optional" />
-              <button id="settings-browse-clone-dir" type="button" class="btn">Browse</button>
+              <button id="settings-browse-clone-dir" type="button" class="btn browse-btn" aria-label="Browse folder" title="Browse folder">📁</button>
             </div>
           </div>
 
@@ -157,32 +157,133 @@
             </label>
           </div>
 
+          <div class="settings-row settings-header-row">
+            <div class="settings-header first">Git</div>
+          </div>
           <div class="settings-row">
-            <label>GitHub CLI (`gh`)</label>
+            <label>Git</label>
             <div class="settings-actions">
-              <button id="settings-gh-install" class="btn" type="button">Install GH CLI</button>
-              <button id="settings-gh-installed" class="btn accent" type="button" disabled style="display:none;">GH CLI Installed</button>
-              <span id="settings-gh-label" class="muted">Used for GitHub login and cloud project discovery.</span>
+              <button id="settings-git-install" class="btn" type="button">Install Git</button>
+              <span id="settings-git-install-loading" class="inline-spinner hidden" aria-hidden="true"></span>
+              <div id="settings-git-missing-line" class="dep-line dep-bad hidden">
+                <span class="dep-cross">✗</span>
+                <span>Git not setup.</span>
+              </div>
+              <div id="settings-git-installed-line" class="dep-line dep-ok hidden">
+                <span class="dep-check">✓</span>
+                <span>Git installed.</span>
+              </div>
             </div>
           </div>
 
+          <div class="settings-row settings-header-row">
+            <div class="settings-header">GitHub</div>
+          </div>
           <div class="settings-row">
-            <label>GitHub Cloud Projects</label>
+            <label>GitHub CLI</label>
+            <div class="settings-actions">
+              <button id="settings-gh-install" class="btn" type="button">Install GitHub CLI</button>
+              <span id="settings-gh-install-loading" class="inline-spinner hidden" aria-hidden="true"></span>
+              <div id="settings-gh-missing-line" class="dep-line dep-bad hidden">
+                <span class="dep-cross">✗</span>
+                <span>GitHub CLI not setup.</span>
+              </div>
+              <div id="settings-gh-installed-line" class="dep-line dep-ok hidden">
+                <span class="dep-check">✓</span>
+                <span>GitHub CLI installed.</span>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <label>GitHub Auth</label>
+            <div class="settings-actions">
+              <button id="settings-gh-auth" class="btn" type="button">Connect GitHub CLI</button>
+              <div id="settings-gh-auth-missing-line" class="dep-line dep-bad hidden">
+                <span class="dep-cross">✗</span>
+                <span>GitHub auth not setup.</span>
+              </div>
+              <div id="settings-gh-connected-line" class="dep-line dep-ok hidden">
+                <span class="dep-check">✓</span>
+                <span id="settings-gh-connected-text">Connected as username (gh).</span>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <label>Cloud Projects</label>
             <div class="settings-actions">
               <button id="settings-github-refresh-cloud" class="btn" type="button">Refresh Cloud Projects</button>
-              <span id="settings-github-status" class="muted">Run `gh auth login` to connect GitHub.</span>
             </div>
           </div>
 
-          <div class="settings-actions">
-            <button id="settings-save" class="btn accent">Save Settings</button>
-            <button id="settings-sync-hub" class="btn" type="button">Sync from Unity Hub</button>
-            <button id="settings-remove-missing" class="btn danger">Remove Missing Projects</button>
+          <div class="settings-row settings-header-row">
+            <div class="settings-header">GitLab</div>
           </div>
+          <div class="settings-row">
+            <label>GitLab</label>
+            <div class="settings-actions">
+              <button id="settings-glab-install" class="btn" type="button">Install GitLab CLI</button>
+              <span id="settings-glab-install-loading" class="inline-spinner hidden" aria-hidden="true"></span>
+              <div id="settings-glab-missing-line" class="dep-line dep-bad hidden">
+                <span class="dep-cross">✗</span>
+                <span>GitLab CLI not setup.</span>
+              </div>
+              <div id="settings-glab-installed-line" class="dep-line dep-ok hidden">
+                <span class="dep-check">✓</span>
+                <span>GitLab CLI installed.</span>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <label>GitLab Auth</label>
+            <div class="settings-actions">
+              <button id="settings-glab-auth" class="btn" type="button">Connect GitLab CLI</button>
+              <div id="settings-glab-auth-missing-line" class="dep-line dep-bad hidden">
+                <span class="dep-cross">✗</span>
+                <span>GitLab auth not setup.</span>
+              </div>
+              <div id="settings-glab-connected-line" class="dep-line dep-ok hidden">
+                <span class="dep-check">✓</span>
+                <span id="settings-glab-connected-text">Connected as username (glab).</span>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <label>Cloud Projects</label>
+            <div class="settings-actions">
+              <button id="settings-gitlab-refresh-cloud" class="btn" type="button">Refresh Cloud Projects</button>
+            </div>
+          </div>
+
+          <div class="settings-row settings-header-row">
+            <div class="settings-header">Unity</div>
+          </div>
+          <div class="settings-row">
+            <label>Unity Hub</label>
+            <div class="settings-actions">
+              <button id="settings-hub-install" class="btn" type="button">Install Unity Hub</button>
+              <span id="settings-hub-install-loading" class="inline-spinner hidden" aria-hidden="true"></span>
+              <div id="settings-hub-missing-line" class="dep-line dep-bad hidden">
+                <span class="dep-cross">✗</span>
+                <span>Unity Hub not setup.</span>
+              </div>
+              <div id="settings-hub-installed-line" class="dep-line dep-ok hidden">
+                <span class="dep-check">✓</span>
+                <span>Unity Hub installed.</span>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row">
+            <label>Unity Projects</label>
+            <div class="settings-actions">
+              <button id="settings-sync-hub" class="btn" type="button">Sync from Unity Hub</button>
+              <button id="settings-remove-missing" class="btn danger">Remove Missing Projects</button>
+            </div>
+          </div>
+
         </section>
 
         <section class="footer-actions installs-footer">
-          <span class="muted">Theme changes apply immediately after saving.</span>
+          <span id="settings-status" class="status-info">Ready</span>
         </section>
       </section>
       </section>
@@ -193,18 +294,18 @@
     <form method="dialog" id="disk-form" class="modal-form">
       <h2>Add from disk</h2>
       <label>Project folder
-        <div class="input-row">
+        <div class="input-row path-picker">
           <input id="disk-path" type="text" />
-          <button id="disk-browse-path" type="button" class="btn">Browse</button>
+          <button id="disk-browse-path" type="button" class="btn browse-btn" aria-label="Browse project folder" title="Browse project folder">📁</button>
         </div>
       </label>
       <label>Nickname
         <input id="disk-nickname" type="text" placeholder="Optional" />
       </label>
       <label>Unity executable
-        <div class="input-row">
+        <div class="input-row path-picker">
           <input id="disk-unity-exe" type="text" placeholder="Optional" />
-          <button id="disk-browse-exe" type="button" class="btn">Browse</button>
+          <button id="disk-browse-exe" type="button" class="btn browse-btn" aria-label="Browse executable" title="Browse executable">📁</button>
         </div>
       </label>
       <menu>
@@ -224,18 +325,18 @@
         <input id="repo-branch" type="text" />
       </label>
       <label>Clone to folder
-        <div class="input-row">
+        <div class="input-row path-picker">
           <input id="repo-target" type="text" />
-          <button id="repo-browse-target" type="button" class="btn">Browse</button>
+          <button id="repo-browse-target" type="button" class="btn browse-btn" aria-label="Browse clone folder" title="Browse clone folder">📁</button>
         </div>
       </label>
       <label>Nickname
         <input id="repo-nickname" type="text" placeholder="Optional" />
       </label>
       <label>Unity executable
-        <div class="input-row">
+        <div class="input-row path-picker">
           <input id="repo-unity-exe" type="text" placeholder="Optional" />
-          <button id="repo-browse-exe" type="button" class="btn">Browse</button>
+          <button id="repo-browse-exe" type="button" class="btn browse-btn" aria-label="Browse executable" title="Browse executable">📁</button>
         </div>
       </label>
       <menu>
