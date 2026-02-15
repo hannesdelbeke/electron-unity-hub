@@ -462,6 +462,7 @@ async function renderProjectsTable(): Promise<void> {
     }
 
     const actionsTd = document.createElement("td");
+    actionsTd.className = "actions-cell";
     const actionsWrap = document.createElement("div");
     actionsWrap.className = "row-actions";
     const actionsButton = document.createElement("button");
@@ -514,6 +515,14 @@ async function renderProjectsTable(): Promise<void> {
         return;
       }
       await launchProjectRow(project);
+    });
+
+    tr.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      selectedId = project.id;
+      openInstallMenuPath = "";
+      openProjectMenuId = project.id;
+      void renderProjectsTable();
     });
 
     fragment.appendChild(tr);
@@ -593,6 +602,7 @@ function renderInstallsTable(): void {
     }
 
     const actionsTd = document.createElement("td");
+    actionsTd.className = "actions-cell";
     const actionsWrap = document.createElement("div");
     actionsWrap.className = "row-actions install-row-actions";
 
@@ -637,6 +647,13 @@ function renderInstallsTable(): void {
       }
       const result = await window.launcherApi.launchUnityEditor(install.path);
       setStatus(result.message);
+    });
+
+    tr.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      openProjectMenuId = "";
+      openInstallMenuPath = install.path;
+      renderInstallsTable();
     });
 
     installsTbody.appendChild(tr);
@@ -984,6 +1001,7 @@ async function init(): Promise<void> {
     wireSettingsView();
     wireProjectSettingsDialog();
     activateTab("projects");
+    projectSort = { key: "lastOpenedIso", direction: "desc" };
     await refreshProjects(false);
   } catch (error) {
     setStatus(`UI init error: ${String(error)}`);

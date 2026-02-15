@@ -1,6 +1,6 @@
 ﻿# Unity Launcher (MVP)
 
-![Launcher Preview](./docs/launcher-preview.png)
+![Launcher Preview](./docs/launcher-preview.svg)
 
 A lightweight Unity project launcher focused on projects, not cloud/learning tabs.
 
