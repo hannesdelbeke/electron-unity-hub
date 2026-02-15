@@ -151,7 +151,7 @@ body {
 
 .sidebar {
   background: var(--sidebar-bg);
-  border-right: 0;
+  border-right: 1px solid var(--line);
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -165,6 +165,7 @@ body {
 
 .sidebar-brand {
   position: relative;
+  margin-top: var(--section-gap);
   height: var(--topbar-height);
   display: flex;
   align-items: center;
@@ -273,6 +274,12 @@ body {
   -webkit-app-region: drag;
 }
 
+.panel-topbar {
+  margin-top: var(--section-gap);
+  margin-bottom: var(--section-gap);
+  border-bottom: 0;
+}
+
 #topbar-projects {
   grid-template-columns: auto minmax(0, 1fr) auto auto auto;
 }
@@ -284,7 +291,13 @@ body {
 }
 
 #topbar-installs {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+#topbar-installs #search-installs {
+  width: 100%;
+  min-width: 0;
+  margin-left: 300px;
 }
 
 #topbar-settings {
@@ -298,6 +311,7 @@ h1 {
 }
 
 #search,
+#search-installs,
 .settings-panel input,
 .theme-select {
   border: 1px solid var(--line);
@@ -314,6 +328,7 @@ h1 {
 .settings-panel {
   background: var(--panel);
   border: 1px solid var(--line);
+  border-left: 0;
   border-radius: 0;
   overflow: auto;
   min-height: 0;
@@ -643,7 +658,8 @@ menu {
 @media (max-width: 980px) {
   .toolbar { grid-template-columns: 1fr; }
 
-  #topbar-projects #search {
+  #topbar-projects #search,
+  #topbar-installs #search-installs {
     margin-left: 0;
   }
 

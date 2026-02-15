@@ -22,7 +22,7 @@
         </button>
         <button id="tab-installs" class="side-tab">
           <span class="tab-icon">UI</span>
-          <span class="tab-label">Unity Installs</span>
+          <span class="tab-label">Installs</span>
         </button>
         <div class="side-spacer"></div>
         <button id="tab-settings" class="side-tab">
@@ -71,8 +71,14 @@
 
       <section id="view-installs" class="view">
         <section id="topbar-installs" class="toolbar panel-topbar">
-          <h1>Unity Installs</h1>
-          <div class="topbar-spacer"></div>
+          <h1>Installs</h1>
+          <input id="search-installs" type="search" placeholder="Search installs" />
+          <div class="add-wrap">
+            <button id="add-toggle-installs" class="btn">Add</button>
+            <div id="add-menu-installs" class="menu hidden">
+              <button id="add-install-disk" class="menu-item">Add executable</button>
+            </div>
+          </div>
           <button id="refresh-installs" class="icon-btn topbar-refresh-btn" type="button" aria-label="Refresh installs" title="Refresh installs">↻</button>
         </section>
 

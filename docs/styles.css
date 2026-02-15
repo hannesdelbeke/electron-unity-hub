@@ -88,8 +88,21 @@ body {
   object-fit: contain;
 }
 
+.demo-scroll {
+  padding: 14px 20px 20px;
+  overflow: auto;
+}
+
 .shell {
-  min-height: 100vh;
+  width: 1024px;
+  min-width: 1024px;
+  height: 800px;
+  max-height: 800px;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--menu-shadow);
   display: grid;
   grid-template-columns: 220px 1fr;
 }
@@ -421,17 +434,6 @@ menu {
   .preview-frame {
     min-width: 1024px;
   }
-
-  .shell { grid-template-columns: 1fr; }
-
-  .sidebar {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .side-spacer { display: none; }
 
   .toolbar { grid-template-columns: 1fr; }
 

@@ -37,8 +37,11 @@ const tbody = document.querySelector<HTMLTableSectionElement>("#projects-table t
 const installsTbody = document.querySelector<HTMLTableSectionElement>("#installs-table tbody");
 const statusEl = document.getElementById("status");
 const searchInput = document.getElementById("search") as HTMLInputElement | null;
+const searchInstallsInput = document.getElementById("search-installs") as HTMLInputElement | null;
 const addToggle = document.getElementById("add-toggle") as HTMLButtonElement | null;
 const addMenu = document.getElementById("add-menu") as HTMLDivElement | null;
+const addToggleInstalls = document.getElementById("add-toggle-installs") as HTMLButtonElement | null;
+const addMenuInstalls = document.getElementById("add-menu-installs") as HTMLDivElement | null;
 
 const diskDialog = document.getElementById("disk-dialog") as HTMLDialogElement | null;
 const repoDialog = document.getElementById("repo-dialog") as HTMLDialogElement | null;
@@ -72,6 +75,7 @@ let projects: ProjectEntry[] = [];
 let installs: UnityInstall[] = [];
 let selectedId = "";
 let searchText = "";
+let searchInstallsText = "";
 let openProjectMenuId = "";
 let openInstallMenuPath = "";
 let editingProjectId = "";
@@ -83,6 +87,7 @@ let installSort: { key: InstallSortKey; direction: SortDirection } = { key: "ver
 const defaultUnityExeKey = "unityLauncher.defaultUnityExe";
 const themePreferenceKey = "unityLauncher.themePreference";
 const dismissedInstallsKey = "unityLauncher.dismissedInstalls";
+const customInstallsKey = "unityLauncher.customInstalls";
 
 type TabName = "projects" | "installs" | "settings";
 
@@ -193,6 +198,7 @@ function getFilteredProjects(): ProjectEntry[] {
 
 function closeAddMenu(): void {
   addMenu?.classList.add("hidden");
+  addMenuInstalls?.classList.add("hidden");
 }
 
 function openDialog(dialogEl: HTMLDialogElement | null): void {
@@ -251,6 +257,53 @@ function dismissInstallPath(pathValue: string): void {
   const next = loadDismissedInstallPaths();
   next.add(pathValue.toLowerCase());
   saveDismissedInstallPaths(next);
+}
+
+function loadCustomInstallPaths(): string[] {
+  try {
+    const raw = localStorage.getItem(customInstallsKey);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as string[];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item) => typeof item === "string" && item.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomInstallPaths(paths: string[]): void {
+  localStorage.setItem(customInstallsKey, JSON.stringify(paths));
+}
+
+function addCustomInstallPath(pathValue: string): void {
+  const normalized = pathValue.trim().toLowerCase();
+  if (!normalized) {
+    return;
+  }
+  const existing = loadCustomInstallPaths();
+  if (existing.some((item) => item.trim().toLowerCase() === normalized)) {
+    return;
+  }
+  saveCustomInstallPaths([...existing, pathValue.trim()]);
+}
+
+function inferInstallVersionFromPath(exePath: string): string {
+  const match = exePath.match(/(\d{4}\.\d+\.\d+[a-z]\d+|\d+\.\d+\.\d+[a-z]\d+)/i);
+  return match?.[1] ?? "unknown";
+}
+
+function getFilteredInstalls(): UnityInstall[] {
+  const q = searchInstallsText.trim().toLowerCase();
+  if (!q) {
+    return installs;
+  }
+  return installs.filter((install) =>
+    [install.version, install.path, install.source].some((value) => value.toLowerCase().includes(q)),
+  );
 }
 
 function dedupeProjects(input: ProjectEntry[]): ProjectEntry[] {
@@ -476,7 +529,7 @@ function renderInstallsTable(): void {
   }
 
   installsTbody.innerHTML = "";
-  const sortedInstalls = [...installs].sort((a, b) => {
+  const sortedInstalls = [...getFilteredInstalls()].sort((a, b) => {
     let left: string | number | boolean;
     let right: string | number | boolean;
 
@@ -600,8 +653,23 @@ async function refreshProjects(updateStatus = true): Promise<void> {
 
 async function refreshInstalls(updateStatus = true): Promise<void> {
   const dismissed = loadDismissedInstallPaths();
-  const allInstalls = await window.launcherApi.getUnityInstalls();
-  installs = allInstalls.filter((install) => !dismissed.has(install.path.toLowerCase()));
+  const detectedInstalls = await window.launcherApi.getUnityInstalls();
+  const customInstalls: UnityInstall[] = loadCustomInstallPaths().map((installPath) => ({
+    version: inferInstallVersionFromPath(installPath),
+    path: installPath,
+    source: "Manual",
+    exists: true,
+  }));
+
+  const merged = [...detectedInstalls, ...customInstalls];
+  const deduped = new Map<string, UnityInstall>();
+  for (const install of merged) {
+    const key = install.path.toLowerCase();
+    if (!deduped.has(key)) {
+      deduped.set(key, install);
+    }
+  }
+  installs = [...deduped.values()].filter((install) => !dismissed.has(install.path.toLowerCase()));
   renderInstallsTable();
   if (updateStatus) {
     setStatus("Unity installs refreshed");
@@ -735,6 +803,12 @@ function wireSorting(): void {
 function wireGlobalEvents(): void {
   addToggle?.addEventListener("click", () => {
     addMenu?.classList.toggle("hidden");
+    addMenuInstalls?.classList.add("hidden");
+  });
+
+  addToggleInstalls?.addEventListener("click", () => {
+    addMenuInstalls?.classList.toggle("hidden");
+    addMenu?.classList.add("hidden");
   });
 
   document.addEventListener("click", (event) => {
@@ -760,9 +834,23 @@ function wireGlobalEvents(): void {
     searchText = searchInput.value;
     void renderProjectsTable();
   });
+  searchInstallsInput?.addEventListener("input", () => {
+    searchInstallsText = searchInstallsInput.value;
+    renderInstallsTable();
+  });
 
   document.getElementById("refresh-btn")?.addEventListener("click", () => void refreshProjects());
   document.getElementById("refresh-installs")?.addEventListener("click", () => void refreshInstalls());
+  document.getElementById("add-install-disk")?.addEventListener("click", async () => {
+    const file = await window.launcherApi.pickFile();
+    if (!file) {
+      return;
+    }
+    addCustomInstallPath(file);
+    closeAddMenu();
+    await refreshInstalls(false);
+    setStatus("Install added");
+  });
 
   document.getElementById("new-project")?.addEventListener("click", () => {
     openDialog(diskDialog);
