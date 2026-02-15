@@ -153,6 +153,24 @@ Package Windows app (portable executable):
 npm run package:win
 ```
 
+## Releases
+
+Use `package.json` version as the single source of truth.
+
+One-command release flows:
+
+```bash
+npm run release:patch
+npm run release:minor
+npm run release:major
+```
+
+Each command does:
+- verify git working tree is clean
+- bump `package.json` version and create matching git tag (no `v` prefix)
+- push commit + tags
+- create GitHub release with generated notes using the same version tag
+
 ## CI Build Artifacts
 
 - Workflow file: `.github/workflows/build.yml`
