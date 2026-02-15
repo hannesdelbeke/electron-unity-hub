@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld("launcherApi", {
   saveProject: (project: ProjectEntry) => ipcRenderer.invoke("projects:save", project),
   deleteProject: (id: string) => ipcRenderer.invoke("projects:delete", id),
   removeMissingProjects: () => ipcRenderer.invoke("projects:removeMissing"),
+  getSettings: () => ipcRenderer.invoke("settings:get"),
+  setDisableRenderThrottling: (value: boolean) => ipcRenderer.invoke("settings:setDisableRenderThrottling", value),
   detectUnityVersion: (projectPath: string) => ipcRenderer.invoke("unity:detectVersion", projectPath),
   getVcsStatus: (projectPath: string) => ipcRenderer.invoke("vcs:status", projectPath),
   getUnityInstalls: () => ipcRenderer.invoke("unity:installs"),

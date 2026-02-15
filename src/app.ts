@@ -7,6 +7,7 @@ import type { ProjectEntry, UnityInstall, VcsStatus } from "./types";
 
 type StoreMeta = {
   firstRunBootstrapDone?: boolean;
+  disableRenderThrottling?: boolean;
 };
 
 type StoreShape = {
@@ -475,10 +476,14 @@ function removeMissingProjects(): { removed: number; remaining: number } {
 }
 
 function createWindow(): void {
+  const store = loadStore();
+  const disableRenderThrottling = store.meta.disableRenderThrottling ?? true;
   const bgColor = nativeTheme.shouldUseDarkColors ? "#111418" : "#f6f7f8";
-  const win = new BrowserWindow({
+  const windowOptions: Electron.BrowserWindowConstructorOptions = {
     width: 1280,
     height: 760,
+    minWidth: 800,
+    minHeight: 400,
     show: false,
     backgroundColor: bgColor,
     autoHideMenuBar: true,
@@ -486,8 +491,22 @@ function createWindow(): void {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: !disableRenderThrottling,
     },
-  });
+  };
+
+  if (process.platform === "win32" || process.platform === "darwin") {
+    windowOptions.titleBarStyle = "hidden";
+    if (process.platform === "win32") {
+      windowOptions.titleBarOverlay = {
+        color: bgColor,
+        symbolColor: nativeTheme.shouldUseDarkColors ? "#e7ecf3" : "#16181d",
+        height: 30,
+      };
+    }
+  }
+
+  const win = new BrowserWindow(windowOptions);
   win.setMenuBarVisibility(false);
 
   const htmlPath = path.join(__dirname, "renderer", "index.html");
@@ -511,6 +530,18 @@ app.whenReady().then(() => {
   ipcMain.handle("projects:save", (_event, project: ProjectEntry) => upsertProject(project));
   ipcMain.handle("projects:delete", (_event, id: string) => deleteProject(id));
   ipcMain.handle("projects:removeMissing", () => removeMissingProjects());
+  ipcMain.handle("settings:get", () => {
+    const store = loadStore();
+    return {
+      disableRenderThrottling: store.meta.disableRenderThrottling ?? true,
+    };
+  });
+  ipcMain.handle("settings:setDisableRenderThrottling", (_event, value: boolean) => {
+    const store = loadStore();
+    store.meta.disableRenderThrottling = value;
+    saveStore(store);
+    return { ok: true };
+  });
   ipcMain.handle("unity:detectVersion", (_event, projectPath: string) => detectUnityVersion(projectPath));
   ipcMain.handle("vcs:status", (_event, projectPath: string) => getVcsStatus(projectPath));
   ipcMain.handle("unity:installs", () => getUnityInstalls());

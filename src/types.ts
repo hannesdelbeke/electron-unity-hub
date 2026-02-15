@@ -28,6 +28,8 @@ declare global {
       saveProject: (project: ProjectEntry) => Promise<ProjectEntry[]>;
       deleteProject: (id: string) => Promise<ProjectEntry[]>;
       removeMissingProjects: () => Promise<{ removed: number; remaining: number }>;
+      getSettings: () => Promise<{ disableRenderThrottling: boolean }>;
+      setDisableRenderThrottling: (value: boolean) => Promise<{ ok: boolean }>;
       detectUnityVersion: (projectPath: string) => Promise<string>;
       getVcsStatus: (projectPath: string) => Promise<VcsStatus>;
       getUnityInstalls: () => Promise<UnityInstall[]>;

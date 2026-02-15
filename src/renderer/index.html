@@ -9,6 +9,10 @@
 <body>
   <main class="shell">
     <aside class="sidebar">
+      <div class="sidebar-brand">
+        <img class="sidebar-brand-icon" src="./assets/unityhub.png" alt="Unity Hub" />
+        <span class="sidebar-brand-title">Hub</span>
+      </div>
       <button id="tab-projects" class="side-tab active">
         <span class="tab-icon">PR</span>
         <span class="tab-label">Projects</span>
@@ -37,22 +41,18 @@
             </div>
           </div>
           <button id="new-project" class="btn accent">New Project</button>
+          <button id="refresh-btn" class="icon-btn topbar-refresh-btn" type="button" aria-label="Refresh projects" title="Refresh projects">↻</button>
         </section>
 
         <section id="topbar-installs" class="toolbar topbar">
           <h1>Unity Installs</h1>
-          <div></div>
-          <div></div>
-          <button id="refresh-installs" class="btn">Refresh Installs</button>
-          <div></div>
+          <div class="topbar-spacer"></div>
+          <button id="refresh-installs" class="icon-btn topbar-refresh-btn" type="button" aria-label="Refresh installs" title="Refresh installs">↻</button>
         </section>
 
         <section id="topbar-settings" class="toolbar topbar">
           <h1>Settings</h1>
-          <div></div>
-          <div></div>
-          <div></div>
-          <div></div>
+          <div class="topbar-spacer"></div>
         </section>
       </section>
 
@@ -76,7 +76,6 @@
         </section>
 
         <section class="footer-actions">
-          <button id="refresh-btn" class="btn">Refresh</button>
           <span id="status">Ready</span>
         </section>
       </section>
@@ -90,6 +89,7 @@
                 <th class="sortable" data-sort="path" data-label="Path">Path</th>
                 <th class="sortable" data-sort="source" data-label="Source">Source</th>
                 <th class="sortable" data-sort="status" data-label="Status">Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -116,6 +116,11 @@
               <option value="dark">Dark</option>
               <option value="light">Light</option>
             </select>
+          </label>
+
+          <label class="checkbox-row">
+            <input id="settings-disable-render-throttling" type="checkbox" />
+            <span>Disable render throttling (smoother resize, higher CPU usage)</span>
           </label>
 
           <div class="settings-actions">

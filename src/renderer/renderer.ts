@@ -55,6 +55,8 @@ const repoUnityExe = document.getElementById("repo-unity-exe") as HTMLInputEleme
 
 const settingsDefaultUnityExe = document.getElementById("settings-default-unity-exe") as HTMLInputElement | null;
 const settingsTheme = document.getElementById("settings-theme") as HTMLSelectElement | null;
+const settingsDisableRenderThrottling =
+  document.getElementById("settings-disable-render-throttling") as HTMLInputElement | null;
 const projectSettingsNickname = document.getElementById("project-settings-nickname") as HTMLInputElement | null;
 
 const tabProjects = document.getElementById("tab-projects");
@@ -73,6 +75,7 @@ let installs: UnityInstall[] = [];
 let selectedId = "";
 let searchText = "";
 let openProjectMenuId = "";
+let openInstallMenuPath = "";
 let editingProjectId = "";
 let didInit = false;
 let projectsRenderToken = 0;
@@ -81,6 +84,7 @@ let installSort: { key: InstallSortKey; direction: SortDirection } = { key: "ver
 
 const defaultUnityExeKey = "unityLauncher.defaultUnityExe";
 const themePreferenceKey = "unityLauncher.themePreference";
+const dismissedInstallsKey = "unityLauncher.dismissedInstalls";
 
 type TabName = "projects" | "installs" | "settings";
 
@@ -195,6 +199,10 @@ function closeProjectRowMenus(): void {
   openProjectMenuId = "";
 }
 
+function closeInstallRowMenus(): void {
+  openInstallMenuPath = "";
+}
+
 function createProjectEntry(partial: Partial<ProjectEntry>): ProjectEntry {
   return {
     id: partial.id ?? "",
@@ -209,6 +217,32 @@ function createProjectEntry(partial: Partial<ProjectEntry>): ProjectEntry {
 
 function requireValue(input: HTMLInputElement | null): string {
   return input?.value.trim() ?? "";
+}
+
+function loadDismissedInstallPaths(): Set<string> {
+  try {
+    const raw = localStorage.getItem(dismissedInstallsKey);
+    if (!raw) {
+      return new Set<string>();
+    }
+    const parsed = JSON.parse(raw) as string[];
+    if (!Array.isArray(parsed)) {
+      return new Set<string>();
+    }
+    return new Set(parsed.map((item) => item.toLowerCase()));
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function saveDismissedInstallPaths(value: Set<string>): void {
+  localStorage.setItem(dismissedInstallsKey, JSON.stringify([...value]));
+}
+
+function dismissInstallPath(pathValue: string): void {
+  const next = loadDismissedInstallPaths();
+  next.add(pathValue.toLowerCase());
+  saveDismissedInstallPaths(next);
 }
 
 function dedupeProjects(input: ProjectEntry[]): ProjectEntry[] {
@@ -718,6 +752,12 @@ function wireSettingsView(): void {
   }
   applyTheme(savedTheme);
 
+  void window.launcherApi.getSettings().then((settings) => {
+    if (settingsDisableRenderThrottling) {
+      settingsDisableRenderThrottling.checked = settings.disableRenderThrottling ?? true;
+    }
+  });
+
   document.getElementById("settings-browse-exe")?.addEventListener("click", async () => {
     const file = await window.launcherApi.pickFile();
     if (file && settingsDefaultUnityExe) {
@@ -730,7 +770,9 @@ function wireSettingsView(): void {
     const pref = (settingsTheme?.value as ThemePreference) || "system";
     localStorage.setItem(themePreferenceKey, pref);
     applyTheme(pref);
-    setStatus("Settings saved");
+    const disableRenderThrottling = settingsDisableRenderThrottling?.checked ?? true;
+    void window.launcherApi.setDisableRenderThrottling(disableRenderThrottling);
+    setStatus("Settings saved. Restart app to apply render throttling change.");
   });
 
   document.getElementById("settings-remove-missing")?.addEventListener("click", async () => {
