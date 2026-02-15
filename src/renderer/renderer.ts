@@ -6,6 +6,7 @@ type ProjectEntry = {
   unityVersion: string;
   unityExe: string;
   lastOpenedIso: string;
+  autoGetLatest?: boolean;
   cloudRepo?: string;
   cloneUrl?: string;
   repoSizeBytes?: number;
@@ -81,9 +82,13 @@ const repoUnityExe = document.getElementById("repo-unity-exe") as HTMLInputEleme
 
 const settingsDefaultUnityExe = document.getElementById("settings-default-unity-exe") as HTMLInputElement | null;
 const settingsTheme = document.getElementById("settings-theme") as HTMLSelectElement | null;
+const settingsDefaultCloneDir = document.getElementById("settings-default-clone-dir") as HTMLInputElement | null;
 const settingsDisableRenderThrottling =
   document.getElementById("settings-disable-render-throttling") as HTMLInputElement | null;
+const settingsAutoGetLatestDefault =
+  document.getElementById("settings-auto-get-latest-default") as HTMLInputElement | null;
 const projectSettingsNickname = document.getElementById("project-settings-nickname") as HTMLInputElement | null;
+const projectSettingsAutoGetLatest = document.getElementById("project-settings-auto-get-latest") as HTMLInputElement | null;
 const githubTokenInput = document.getElementById("github-token-input") as HTMLInputElement | null;
 const settingsGithubStatus = document.getElementById("settings-github-status");
 const settingsGhInstallBtn = document.getElementById("settings-gh-install") as HTMLButtonElement | null;
@@ -101,6 +106,7 @@ const viewSettings = document.getElementById("view-settings");
 let projects: ProjectEntry[] = [];
 let cloudProjects: ProjectEntry[] = [];
 let installs: UnityInstall[] = [];
+let availableUnityVersions = new Set<string>();
 let selectedId = "";
 let searchText = "";
 let searchInstallsText = "";
@@ -121,6 +127,8 @@ let installSort: { key: InstallSortKey; direction: SortDirection } = { key: "ver
 
 const defaultUnityExeKey = "unityLauncher.defaultUnityExe";
 const themePreferenceKey = "unityLauncher.themePreference";
+const defaultCloneDirKey = "unityLauncher.defaultCloneDir";
+const autoGetLatestDefaultKey = "unityLauncher.autoGetLatestDefault";
 const dismissedInstallsKey = "unityLauncher.dismissedInstalls";
 const customInstallsKey = "unityLauncher.customInstalls";
 
@@ -226,8 +234,22 @@ function svgIcon(name: "warning" | "arrowDown" | "arrowUp" | "dot" | "moreHorizo
   }
 }
 
-function metricWithIcon(icon: "arrowDown" | "arrowUp" | "dot", value: string | number, title: string): string {
-  return `<span class="vcs-metric" title="${title}"><span class="vcs-metric-icon">${svgIcon(icon)}</span><span>${value}</span></span>`;
+function metricWithIcon(
+  icon: "arrowDown" | "arrowUp" | "dot",
+  value: string | number,
+  title: string,
+  iconAfter = false,
+  hideIcon = false,
+): string {
+  const numericValue = typeof value === "number" ? value : Number.parseInt(String(value).replace(/[^\d-]/g, ""), 10);
+  const isActive = Number.isFinite(numericValue) && numericValue > 0;
+  if (hideIcon) {
+    return `<span class="vcs-metric${isActive ? " active" : ""}" title="${title}"><span>${value}</span></span>`;
+  }
+  if (iconAfter) {
+    return `<span class="vcs-metric${isActive ? " active" : ""}" title="${title}"><span>${value}</span><span class="vcs-metric-icon">${svgIcon(icon)}</span></span>`;
+  }
+  return `<span class="vcs-metric${isActive ? " active" : ""}" title="${title}"><span class="vcs-metric-icon">${svgIcon(icon)}</span><span>${value}</span></span>`;
 }
 
 function formatVcsText(vcs: VcsStatus): string {
@@ -260,12 +282,16 @@ function formatVcsHtml(vcs: VcsStatus): string {
   const conflictWarn = vcs.conflictCount > 0
     ? `<span class="vcs-warn" title="Conflict/clash detected">${svgIcon("warning")}</span>`
     : "";
-  const incoming = metricWithIcon("arrowDown", vcs.incomingCount, "Changes to pull");
-  const outgoing = vcs.kind === "Git"
-    ? metricWithIcon("arrowUp", vcs.outgoingCount, "Changes to push")
+  const incoming = vcs.incomingCount > 0
+    ? metricWithIcon("arrowDown", vcs.incomingCount, "Changes to pull", true)
     : "";
-  const changed = metricWithIcon("dot", `(${vcs.localChangesCount})`, "Changed files");
-  return `<div class="vcs-cell"><span class="vcs-kind">${icon}</span>${conflictWarn}${infoWarn}${incoming}${outgoing}${changed}</div>`;
+  const outgoing = vcs.kind === "Git"
+    ? (vcs.outgoingCount > 0 ? metricWithIcon("arrowUp", vcs.outgoingCount, "Changes to push", true) : "")
+    : "";
+  const changed = vcs.localChangesCount > 0
+    ? metricWithIcon("dot", `(${vcs.localChangesCount})`, "Changed files", false, true)
+    : "";
+  return `<div class="vcs-cell"><span class="vcs-kind">${icon}</span>${conflictWarn}${infoWarn}${changed}${outgoing}${incoming}</div>`;
 }
 function formatLastOpened(iso: string): string {
   if (!iso) {
@@ -299,6 +325,26 @@ function statusLabel(missing: boolean, isOpen: boolean, isInstalled: boolean, is
 
 function warningLabel(missing: boolean): string {
   return missing ? "<span class=\"warning-pill\">Missing</span>" : "";
+}
+
+function normalizeUnityVersion(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function isUnityVersionAvailable(version: string): boolean {
+  const normalized = normalizeUnityVersion(version);
+  if (!normalized) {
+    return true;
+  }
+  if (availableUnityVersions.has(normalized)) {
+    return true;
+  }
+  for (const installed of availableUnityVersions) {
+    if (installed.startsWith(normalized) || normalized.startsWith(installed)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function createCellContent(value: string, asHtml = false): HTMLDivElement {
@@ -420,6 +466,7 @@ function createProjectEntry(partial: Partial<ProjectEntry>): ProjectEntry {
     unityVersion: partial.unityVersion ?? "",
     unityExe: partial.unityExe ?? "",
     lastOpenedIso: partial.lastOpenedIso ?? "",
+    autoGetLatest: partial.autoGetLatest ?? getAutoGetLatestDefault(),
     cloudRepo: partial.cloudRepo ?? "",
     cloneUrl: partial.cloneUrl ?? "",
     repoSizeBytes: partial.repoSizeBytes ?? 0,
@@ -428,6 +475,28 @@ function createProjectEntry(partial: Partial<ProjectEntry>): ProjectEntry {
 
 function requireValue(input: HTMLInputElement | null): string {
   return input?.value.trim() ?? "";
+}
+
+function getDefaultCloneDir(): string {
+  const explicit = requireValue(settingsDefaultCloneDir);
+  if (explicit) {
+    return explicit;
+  }
+  return (localStorage.getItem(defaultCloneDirKey) ?? "").trim();
+}
+
+function getAutoGetLatestDefault(): boolean {
+  if (settingsAutoGetLatestDefault) {
+    return settingsAutoGetLatestDefault.checked;
+  }
+  return localStorage.getItem(autoGetLatestDefaultKey) === "true";
+}
+
+function shouldAutoGetLatest(project: ProjectEntry): boolean {
+  if (typeof project.autoGetLatest === "boolean") {
+    return project.autoGetLatest;
+  }
+  return getAutoGetLatestDefault();
 }
 
 function loadDismissedInstallPaths(): Set<string> {
@@ -651,6 +720,9 @@ function openProjectSettings(project: ProjectEntry): void {
   if (projectSettingsNickname) {
     projectSettingsNickname.value = project.nickname;
   }
+  if (projectSettingsAutoGetLatest) {
+    projectSettingsAutoGetLatest.checked = shouldAutoGetLatest(project);
+  }
   projectSettingsDialog?.showModal();
 }
 
@@ -782,7 +854,16 @@ async function renderProjectsTable(): Promise<void> {
     tr.appendChild(pathTd);
 
     const versionTd = document.createElement("td");
-    versionTd.appendChild(createCellContent(values[1]));
+    const versionContent = createCellContent(values[1]);
+    const showEditorWarning = project.path.trim().length > 0 && !isMissing && !isUnityVersionAvailable(project.unityVersion);
+    if (showEditorWarning) {
+      const warn = document.createElement("span");
+      warn.className = "editor-missing-warn";
+      warn.title = `No matching Unity editor install found for ${project.unityVersion || "this project"}`;
+      warn.innerHTML = svgIcon("warning");
+      versionContent.appendChild(warn);
+    }
+    versionTd.appendChild(versionContent);
     tr.appendChild(versionTd);
 
     const vcsTd = document.createElement("td");
@@ -883,7 +964,8 @@ async function renderProjectsTable(): Promise<void> {
     const cloneBtn = createMenuItem("Clone", "⭳", async (event) => {
       event.stopPropagation();
       closeProjectRowMenus();
-      const parentDir = await window.launcherApi.pickDirectory();
+      const configuredDefault = getDefaultCloneDir();
+      const parentDir = configuredDefault || await window.launcherApi.pickDirectory();
       if (!parentDir) {
         setStatus("Clone cancelled");
         return;
@@ -1104,16 +1186,59 @@ function renderInstallsTable(): void {
 }
 
 async function refreshProjects(updateStatus = true): Promise<void> {
-  const [localProjects, remoteCloudProjects] = await Promise.all([
+  const [localProjects, remoteCloudProjects, detectedInstalls] = await Promise.all([
     window.launcherApi.getProjects(),
     window.launcherApi.getCloudProjects(),
+    window.launcherApi.getUnityInstalls(),
   ]);
+  const customInstallVersions = loadCustomInstallPaths().map(inferInstallVersionFromPath);
+  availableUnityVersions = new Set([
+    ...detectedInstalls.map((item) => normalizeUnityVersion(item.version)),
+    ...customInstallVersions.map((item) => normalizeUnityVersion(item)),
+  ].filter((value) => value.length > 0));
   cloudProjects = dedupeProjects(remoteCloudProjects);
   projects = mergeProjects(dedupeProjects(localProjects), cloudProjects);
   await renderProjectsTable();
   if (updateStatus) {
     setStatus(`Loaded ${projects.length} projects`);
   }
+}
+
+async function autoGetLatestOnStartup(): Promise<void> {
+  const targets = projects.filter((project) => project.path.trim().length > 0 && shouldAutoGetLatest(project));
+  if (targets.length === 0) {
+    return;
+  }
+
+  let updated = 0;
+  let upToDate = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  await withActivity("Getting latest project changes...", async () => {
+    for (const project of targets) {
+      const vcs = await window.launcherApi.getVcsStatus(project.path);
+      if (vcs.kind !== "Git") {
+        skipped += 1;
+        continue;
+      }
+      const result = await window.launcherApi.gitPull(project.path);
+      if (result.ok) {
+        if (/already up to date/i.test(result.message)) {
+          upToDate += 1;
+        } else {
+          updated += 1;
+        }
+      } else {
+        failed += 1;
+      }
+    }
+  });
+
+  await syncProjectRowCache(true);
+  await renderProjectsTable();
+  const msg = `Auto latest: ${updated} updated, ${upToDate} up to date${skipped ? `, ${skipped} skipped` : ""}${failed ? `, ${failed} failed` : ""}`;
+  setStatus(msg, failed > 0 ? "warning" : "info", 7000);
 }
 
 async function refreshInstalls(updateStatus = true): Promise<void> {
@@ -1345,7 +1470,12 @@ function wireDiskDialog(): void {
 }
 
 function wireRepoDialog(): void {
-  document.getElementById("add-repo")?.addEventListener("click", () => openDialog(repoDialog));
+  document.getElementById("add-repo")?.addEventListener("click", () => {
+    if (repoTarget && !repoTarget.value.trim()) {
+      repoTarget.value = getDefaultCloneDir();
+    }
+    openDialog(repoDialog);
+  });
 
   document.getElementById("repo-browse-target")?.addEventListener("click", async () => {
     const dir = await window.launcherApi.pickDirectory();
@@ -1379,6 +1509,14 @@ function wireSettingsView(): void {
   }
   applyTheme(savedTheme);
 
+  const savedCloneDir = localStorage.getItem(defaultCloneDirKey);
+  if (savedCloneDir && settingsDefaultCloneDir) {
+    settingsDefaultCloneDir.value = savedCloneDir;
+  }
+  if (settingsAutoGetLatestDefault) {
+    settingsAutoGetLatestDefault.checked = localStorage.getItem(autoGetLatestDefaultKey) === "true";
+  }
+
   void window.launcherApi.getSettings().then((settings) => {
     if (settingsDisableRenderThrottling) {
       settingsDisableRenderThrottling.checked = settings.disableRenderThrottling ?? true;
@@ -1392,8 +1530,17 @@ function wireSettingsView(): void {
     }
   });
 
+  document.getElementById("settings-browse-clone-dir")?.addEventListener("click", async () => {
+    const dir = await window.launcherApi.pickDirectory();
+    if (dir && settingsDefaultCloneDir) {
+      settingsDefaultCloneDir.value = dir;
+    }
+  });
+
   document.getElementById("settings-save")?.addEventListener("click", () => {
     localStorage.setItem(defaultUnityExeKey, requireValue(settingsDefaultUnityExe));
+    localStorage.setItem(defaultCloneDirKey, requireValue(settingsDefaultCloneDir));
+    localStorage.setItem(autoGetLatestDefaultKey, String(settingsAutoGetLatestDefault?.checked ?? false));
     const pref = (settingsTheme?.value as ThemePreference) || "system";
     localStorage.setItem(themePreferenceKey, pref);
     applyTheme(pref);
@@ -1406,6 +1553,12 @@ function wireSettingsView(): void {
     const result = await window.launcherApi.removeMissingProjects();
     await refreshProjects(false);
     setStatus(`Removed ${result.removed} missing projects`);
+  });
+
+  document.getElementById("settings-sync-hub")?.addEventListener("click", async () => {
+    const result = await withActivity("Syncing from Unity Hub...", () => window.launcherApi.syncFromUnityHub());
+    await Promise.all([refreshProjects(false), refreshInstalls(false)]);
+    setActionStatus(result, 5000, 7000);
   });
 
   const refreshGitHubStatus = async (): Promise<void> => {
@@ -1492,8 +1645,9 @@ function wireProjectSettingsDialog(): void {
     const updated: ProjectEntry = {
       ...existing,
       nickname: requireValue(projectSettingsNickname),
+      autoGetLatest: projectSettingsAutoGetLatest?.checked ?? shouldAutoGetLatest(existing),
     };
-    projects = await window.launcherApi.saveProject(updated);
+    await saveProject(updated);
     editingProjectId = "";
     projectSettingsDialog?.close();
     await renderProjectsTable();
@@ -1517,6 +1671,7 @@ async function init(): Promise<void> {
     activateTab("projects");
     projectSort = { key: "lastOpenedIso", direction: "desc" };
     await refreshProjects(false);
+    void autoGetLatestOnStartup();
   } catch (error) {
     setStatus(`UI init error: ${String(error)}`);
   }

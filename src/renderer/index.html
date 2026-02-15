@@ -134,10 +134,26 @@
           </div>
 
           <div class="settings-row">
+            <label for="settings-default-clone-dir">Default clone folder</label>
+            <div class="input-row">
+              <input id="settings-default-clone-dir" type="text" placeholder="Optional" />
+              <button id="settings-browse-clone-dir" type="button" class="btn">Browse</button>
+            </div>
+          </div>
+
+          <div class="settings-row">
             <label for="settings-disable-render-throttling">Render throttling</label>
             <label class="checkbox-row" for="settings-disable-render-throttling">
               <input id="settings-disable-render-throttling" type="checkbox" />
               <span>Disable (smoother resize, higher CPU usage)</span>
+            </label>
+          </div>
+
+          <div class="settings-row">
+            <label for="settings-auto-get-latest-default">Auto get latest</label>
+            <label class="checkbox-row" for="settings-auto-get-latest-default">
+              <input id="settings-auto-get-latest-default" type="checkbox" />
+              <span>Default for projects on startup</span>
             </label>
           </div>
 
@@ -162,6 +178,7 @@
 
           <div class="settings-actions">
             <button id="settings-save" class="btn accent">Save Settings</button>
+            <button id="settings-sync-hub" class="btn" type="button">Sync from Unity Hub</button>
             <button id="settings-remove-missing" class="btn danger">Remove Missing Projects</button>
           </div>
         </section>
@@ -235,6 +252,10 @@
       <h2>Project Settings</h2>
       <label>Nickname
         <input id="project-settings-nickname" type="text" placeholder="Optional" />
+      </label>
+      <label class="checkbox-row" for="project-settings-auto-get-latest">
+        <input id="project-settings-auto-get-latest" type="checkbox" />
+        <span>Auto get latest on startup</span>
       </label>
       <menu>
         <button value="cancel" type="button" class="btn" onclick="this.closest('dialog')?.close()">Cancel</button>

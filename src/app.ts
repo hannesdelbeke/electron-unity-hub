@@ -516,13 +516,12 @@ function findHubFile(fileName: string): string {
   return "";
 }
 
-function bootstrapFromHubOnFirstRun(store: StoreShape): StoreShape {
-  if (store.meta.firstRunBootstrapDone) {
-    return store;
-  }
-
+function importHubProjectsIntoStore(store: StoreShape): { added: number; hubFound: boolean } {
+  let added = 0;
+  let hubFound = false;
   const hubProjectsFile = findHubFile("projects-v1.json");
   if (hubProjectsFile && existsSync(hubProjectsFile)) {
+    hubFound = true;
     type HubProject = {
       path?: string;
       title?: string;
@@ -563,16 +562,40 @@ function bootstrapFromHubOnFirstRun(store: StoreShape): StoreShape {
           unityExe: "",
           lastOpenedIso,
         });
+        added += 1;
         existing.add(norm);
       }
     } catch {
       // Ignore malformed hub cache.
     }
   }
+  return { added, hubFound };
+}
+
+function bootstrapFromHubOnFirstRun(store: StoreShape): StoreShape {
+  if (store.meta.firstRunBootstrapDone) {
+    return store;
+  }
+
+  importHubProjectsIntoStore(store);
 
   store.meta.firstRunBootstrapDone = true;
   saveStore(store);
   return store;
+}
+
+function syncProjectsFromUnityHub(): { ok: boolean; message: string; added: number } {
+  const store = loadStore();
+  const { added, hubFound } = importHubProjectsIntoStore(store);
+  if (!hubFound) {
+    return { ok: false, message: "Unity Hub cache not found on this machine.", added: 0 };
+  }
+  saveStore(store);
+  return {
+    ok: true,
+    message: added > 0 ? `Imported ${added} project${added === 1 ? "" : "s"} from Unity Hub.` : "No new Unity Hub projects found.",
+    added,
+  };
 }
 
 function inferVersionFromPath(exePath: string, fallback = "unknown"): string {
@@ -1994,6 +2017,7 @@ app.whenReady().then(() => {
   ipcMain.handle("projects:deleteCloud", (_event, id: string) => removeCloudProjectById(id));
   ipcMain.handle("projects:cloneCloud", (_event, projectId: string, parentDir: string) => cloneCloudProject(projectId, parentDir));
   ipcMain.handle("projects:removeMissing", () => removeMissingProjects());
+  ipcMain.handle("projects:syncFromUnityHub", () => syncProjectsFromUnityHub());
   ipcMain.handle("settings:get", () => {
     const store = loadStore();
     return {

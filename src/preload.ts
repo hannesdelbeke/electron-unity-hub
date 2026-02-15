@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("launcherApi", {
   deleteCloudProject: (id: string) => ipcRenderer.invoke("projects:deleteCloud", id),
   cloneCloudProject: (projectId: string, parentDir: string) => ipcRenderer.invoke("projects:cloneCloud", projectId, parentDir),
   removeMissingProjects: () => ipcRenderer.invoke("projects:removeMissing"),
+  syncFromUnityHub: () => ipcRenderer.invoke("projects:syncFromUnityHub"),
   getSettings: () => ipcRenderer.invoke("settings:get"),
   setDisableRenderThrottling: (value: boolean) => ipcRenderer.invoke("settings:setDisableRenderThrottling", value),
   detectUnityVersion: (projectPath: string) => ipcRenderer.invoke("unity:detectVersion", projectPath),

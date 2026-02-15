@@ -6,6 +6,7 @@ export type ProjectEntry = {
   unityVersion: string;
   unityExe: string;
   lastOpenedIso: string;
+  autoGetLatest?: boolean;
   cloudRepo?: string;
   cloneUrl?: string;
   repoSizeBytes?: number;
@@ -39,6 +40,7 @@ declare global {
       deleteCloudProject: (id: string) => Promise<ProjectEntry[]>;
       cloneCloudProject: (projectId: string, parentDir: string) => Promise<{ ok: boolean; message: string; projects: ProjectEntry[] }>;
       removeMissingProjects: () => Promise<{ removed: number; remaining: number }>;
+      syncFromUnityHub: () => Promise<{ ok: boolean; message: string; added: number }>;
       getSettings: () => Promise<{ disableRenderThrottling: boolean }>;
       setDisableRenderThrottling: (value: boolean) => Promise<{ ok: boolean }>;
       detectUnityVersion: (projectPath: string) => Promise<string>;
