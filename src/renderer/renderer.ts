@@ -38,8 +38,6 @@ const statusEl = document.getElementById("status");
 const searchInput = document.getElementById("search") as HTMLInputElement | null;
 const addToggle = document.getElementById("add-toggle") as HTMLButtonElement | null;
 const addMenu = document.getElementById("add-menu") as HTMLDivElement | null;
-const projectsMoreToggle = document.getElementById("projects-more-toggle") as HTMLButtonElement | null;
-const projectsMoreMenu = document.getElementById("projects-more-menu") as HTMLDivElement | null;
 
 const diskDialog = document.getElementById("disk-dialog") as HTMLDialogElement | null;
 const repoDialog = document.getElementById("repo-dialog") as HTMLDialogElement | null;
@@ -76,6 +74,8 @@ let selectedId = "";
 let searchText = "";
 let openProjectMenuId = "";
 let editingProjectId = "";
+let didInit = false;
+let projectsRenderToken = 0;
 let projectSort: { key: ProjectSortKey; direction: SortDirection } = { key: "lastOpenedIso", direction: "desc" };
 let installSort: { key: InstallSortKey; direction: SortDirection } = { key: "version", direction: "asc" };
 
@@ -183,16 +183,11 @@ function closeAddMenu(): void {
   addMenu?.classList.add("hidden");
 }
 
-function closeProjectsMenu(): void {
-  projectsMoreMenu?.classList.add("hidden");
-}
-
 function openDialog(dialogEl: HTMLDialogElement | null): void {
   if (!dialogEl) {
     return;
   }
   closeAddMenu();
-  closeProjectsMenu();
   dialogEl.showModal();
 }
 
@@ -214,6 +209,26 @@ function createProjectEntry(partial: Partial<ProjectEntry>): ProjectEntry {
 
 function requireValue(input: HTMLInputElement | null): string {
   return input?.value.trim() ?? "";
+}
+
+function dedupeProjects(input: ProjectEntry[]): ProjectEntry[] {
+  const seen = new Set<string>();
+  const result: ProjectEntry[] = [];
+  for (const project of input) {
+    const key = [
+      project.path.trim().toLowerCase(),
+      project.nickname.trim().toLowerCase(),
+      project.name.trim().toLowerCase(),
+      project.unityVersion.trim().toLowerCase(),
+      project.unityExe.trim().toLowerCase(),
+    ].join("|");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(project);
+  }
+  return result;
 }
 
 async function launchProjectRow(project: ProjectEntry): Promise<void> {
@@ -248,7 +263,7 @@ async function renderProjectsTable(): Promise<void> {
     return;
   }
 
-  tbody.innerHTML = "";
+  const token = ++projectsRenderToken;
   const visible = getFilteredProjects();
   const rows: ProjectTableRow[] = await Promise.all(
     visible.map(async (project) => {
@@ -260,6 +275,10 @@ async function renderProjectsTable(): Promise<void> {
       };
     }),
   );
+
+  if (token !== projectsRenderToken) {
+    return;
+  }
 
   rows.sort((a, b) => {
     let left: string | number | boolean;
@@ -301,6 +320,7 @@ async function renderProjectsTable(): Promise<void> {
 
   updateSortHeaderIndicators("projects-table", projectSort.key, projectSort.direction);
 
+  const fragment = document.createDocumentFragment();
   for (const row of rows) {
     const project = row.project;
     const tr = document.createElement("tr");
@@ -338,7 +358,7 @@ async function renderProjectsTable(): Promise<void> {
     const actionsButton = document.createElement("button");
     actionsButton.className = "icon-btn row-action-btn";
     actionsButton.type = "button";
-    actionsButton.textContent = "...";
+    actionsButton.textContent = "…";
     actionsButton.setAttribute("aria-label", "Project actions");
     actionsButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -387,8 +407,11 @@ async function renderProjectsTable(): Promise<void> {
       await launchProjectRow(project);
     });
 
-    tbody.appendChild(tr);
+    fragment.appendChild(tr);
   }
+
+  tbody.innerHTML = "";
+  tbody.appendChild(fragment);
 }
 
 function renderInstallsTable(): void {
@@ -464,7 +487,7 @@ function renderInstallsTable(): void {
 }
 
 async function refreshProjects(updateStatus = true): Promise<void> {
-  projects = await window.launcherApi.getProjects();
+  projects = dedupeProjects(await window.launcherApi.getProjects());
   await renderProjectsTable();
   if (updateStatus) {
     setStatus(`Loaded ${projects.length} projects`);
@@ -606,12 +629,6 @@ function wireSorting(): void {
 function wireGlobalEvents(): void {
   addToggle?.addEventListener("click", () => {
     addMenu?.classList.toggle("hidden");
-    closeProjectsMenu();
-  });
-
-  projectsMoreToggle?.addEventListener("click", () => {
-    projectsMoreMenu?.classList.toggle("hidden");
-    closeAddMenu();
   });
 
   document.addEventListener("click", (event) => {
@@ -621,9 +638,6 @@ function wireGlobalEvents(): void {
     }
     if (!target.closest(".add-wrap")) {
       closeAddMenu();
-    }
-    if (!target.closest(".projects-more-wrap")) {
-      closeProjectsMenu();
     }
     if (!target.closest(".row-actions")) {
       closeProjectRowMenus();
@@ -636,7 +650,6 @@ function wireGlobalEvents(): void {
     void renderProjectsTable();
   });
 
-  document.getElementById("delete-btn")?.addEventListener("click", () => void removeSelectedProject());
   document.getElementById("refresh-btn")?.addEventListener("click", () => void refreshProjects());
   document.getElementById("refresh-installs")?.addEventListener("click", () => void refreshInstalls());
 
@@ -645,15 +658,6 @@ function wireGlobalEvents(): void {
     setStatus("New project: choose a local project folder");
   });
 
-  document.getElementById("projects-menu-settings")?.addEventListener("click", () => {
-    closeProjectsMenu();
-    activateTab("settings");
-  });
-
-  document.getElementById("projects-menu-remove")?.addEventListener("click", () => {
-    closeProjectsMenu();
-    void removeSelectedProject();
-  });
 }
 
 function wireDiskDialog(): void {
@@ -760,6 +764,10 @@ function wireProjectSettingsDialog(): void {
 }
 
 async function init(): Promise<void> {
+  if (didInit) {
+    return;
+  }
+  didInit = true;
   try {
     wireSidebarTabs();
     wireSorting();

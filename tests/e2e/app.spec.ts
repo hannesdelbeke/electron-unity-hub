@@ -41,19 +41,26 @@ test.describe("Electron launcher UI", () => {
     }
   });
 
-  test("Project menu opens settings tab and cancel closes add dialog", async () => {
+  test("Project row menu opens project settings and cancel closes add dialog", async () => {
     const app = await electron.launch({ args: ["dist/app.js"] });
     try {
       const window = await app.firstWindow();
-      await window.waitForSelector("#projects-more-toggle");
+      await window.waitForSelector("#new-project");
 
-      await window.click("#projects-more-toggle");
-      await expect(window.locator("#projects-more-menu")).toBeVisible();
+      await window.click("#new-project");
+      await expect(window.locator("#disk-dialog[open]")).toBeVisible();
+      await window.fill("#disk-path", "C:\\temp\\launcher-test-project");
+      await window.click("#disk-save");
+      await expect(window.locator("#disk-dialog[open]")).toHaveCount(0);
 
-      await window.click("#projects-menu-settings");
-      await expect(window.locator("#view-settings")).toHaveClass(/active/);
+      await window.waitForSelector("button.row-action-btn");
+      await window.click("button.row-action-btn");
+      await expect(window.locator(".row-menu:not(.hidden)")).toBeVisible();
+      await window.click(".row-menu:not(.hidden) .menu-item");
+      await expect(window.locator("#project-settings-dialog[open]")).toBeVisible();
+      await window.click("#project-settings-dialog menu button.btn");
+      await expect(window.locator("#project-settings-dialog[open]")).toHaveCount(0);
 
-      await window.click("#tab-projects");
       await window.click("#new-project");
       await expect(window.locator("#disk-dialog[open]")).toBeVisible();
       await window.click("#disk-dialog menu button.btn");

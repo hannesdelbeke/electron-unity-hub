@@ -126,17 +126,17 @@ body {
 .sidebar {
   background: var(--sidebar-bg);
   border-right: 1px solid var(--line);
-  padding: 12px;
+  padding: var(--topbar-height) 0 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .side-tab {
-  border: 1px solid var(--sidebar-tab-border);
-  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  border: 0;
+  background: transparent;
   color: var(--text);
-  border-radius: 12px;
+  border-radius: 0;
   height: 44px;
   padding: 0 12px;
   text-align: left;
@@ -145,7 +145,8 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+  transition: background 120ms ease;
+  outline: none;
 }
 
 .side-tab:hover {
@@ -154,8 +155,7 @@ body {
 
 .side-tab.active {
   background: var(--sidebar-active);
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--sidebar-tab-border));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+  box-shadow: none;
 }
 
 .tab-icon {
@@ -188,18 +188,18 @@ body {
 
 .content {
   min-width: 0;
-  padding: 20px;
+  padding: 0;
   display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
 }
 
 .topbar-host {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   height: var(--topbar-height);
 }
 
@@ -209,9 +209,10 @@ body {
 
 .view.active {
   display: grid;
-  grid-template-rows: 1fr auto;
-  gap: 12px;
-  min-height: calc(100vh - 160px);
+  grid-template-rows: minmax(0, 1fr) min-content;
+  gap: 0;
+  min-height: 0;
+  height: 100%;
 }
 
 .toolbar {
@@ -234,6 +235,7 @@ body {
 
 .view-host {
   min-height: 0;
+  overflow: hidden;
 }
 
 h1 {
@@ -258,8 +260,9 @@ h1 {
 .settings-panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 0;
   overflow: auto;
+  min-height: 0;
 }
 
 .settings-panel {
@@ -319,6 +322,7 @@ tr.selected {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 0 8px;
 }
 
 #status {
@@ -364,20 +368,21 @@ tr.selected {
 }
 
 .add-wrap { position: relative; }
-.projects-more-wrap { position: relative; }
 .row-actions { position: relative; display: flex; justify-content: flex-end; }
 
 .icon-btn {
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--text);
-  height: 36px;
-  min-width: 40px;
-  padding: 0 10px;
+  height: 40px;
+  min-width: 44px;
+  padding: 0 12px;
   border-radius: 8px;
   cursor: pointer;
   font: inherit;
   line-height: 1;
+  font-size: 20px;
+  font-weight: 700;
 }
 
 .icon-btn:hover {
@@ -385,8 +390,9 @@ tr.selected {
 }
 
 .row-action-btn {
-  height: 30px;
-  min-width: 34px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
   border-radius: 6px;
 }
 
@@ -501,6 +507,7 @@ menu {
   .sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--line);
+    padding-top: 0;
     flex-direction: row;
     align-items: center;
   }
