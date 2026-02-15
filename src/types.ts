@@ -9,9 +9,21 @@
 };
 
 export type VcsStatus = {
+  providerId?: "git" | "perforce" | "none" | "other";
+  icon?: string;
   kind: string;
   branchOrStream: string;
   state: string;
+  localChangesCount?: number;
+  incomingCount?: number | null;
+  outgoingCount?: number | null;
+  pendingWorkItemsCount?: number | null;
+  lastRefreshIso?: string;
+  message?: string;
+  supports?: {
+    incomingOutgoing: boolean;
+    pendingWorkItems: boolean;
+  };
 };
 
 export type UnityInstall = {
@@ -30,6 +42,7 @@ declare global {
       removeMissingProjects: () => Promise<{ removed: number; remaining: number }>;
       detectUnityVersion: (projectPath: string) => Promise<string>;
       getVcsStatus: (projectPath: string) => Promise<VcsStatus>;
+      refreshVcsStatus: (projectPath: string) => Promise<VcsStatus>;
       getUnityInstalls: () => Promise<UnityInstall[]>;
       launchOrFocus: (project: ProjectEntry) => Promise<{
         ok: boolean;

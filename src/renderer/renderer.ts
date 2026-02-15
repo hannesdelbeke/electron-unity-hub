@@ -9,9 +9,21 @@
 };
 
 type VcsStatus = {
+  providerId?: "git" | "perforce" | "none" | "other";
+  icon?: string;
   kind: string;
   branchOrStream: string;
   state: string;
+  localChangesCount?: number;
+  incomingCount?: number | null;
+  outgoingCount?: number | null;
+  pendingWorkItemsCount?: number | null;
+  lastRefreshIso?: string;
+  message?: string;
+  supports?: {
+    incomingOutgoing: boolean;
+    pendingWorkItems: boolean;
+  };
 };
 
 type UnityInstall = {
@@ -117,8 +129,24 @@ function formatVcs(vcs: VcsStatus): string {
   if (vcs.kind === "None") {
     return "None";
   }
-  const branch = vcs.branchOrStream ? ` ${vcs.branchOrStream}` : "";
-  return `${vcs.kind}${branch} (${vcs.state})`;
+  const providerLabel = vcs.providerId === "perforce" ? "P4" : vcs.providerId === "git" ? "Git" : vcs.kind;
+  const segments: string[] = [];
+  if (vcs.branchOrStream) {
+    segments.push(vcs.branchOrStream);
+  }
+  if (typeof vcs.localChangesCount === "number") {
+    segments.push(`L${vcs.localChangesCount}`);
+  }
+  if (typeof vcs.incomingCount === "number") {
+    segments.push(`In${vcs.incomingCount}`);
+  }
+  if (typeof vcs.outgoingCount === "number") {
+    segments.push(`Out${vcs.outgoingCount}`);
+  }
+  if (typeof vcs.pendingWorkItemsCount === "number") {
+    segments.push(`CL${vcs.pendingWorkItemsCount}`);
+  }
+  return `${providerLabel} ${segments.join(" ")} (${vcs.state})`.trim();
 }
 
 function formatLastOpened(iso: string): string {

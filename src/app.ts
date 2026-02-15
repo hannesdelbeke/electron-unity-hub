@@ -282,17 +282,52 @@ function run(cmd: string, args: string[], cwd: string): string {
   return "";
 }
 
+function countNonEmptyLines(value: string): number {
+  if (!value.trim()) {
+    return 0;
+  }
+  return value.split(/\r?\n/).filter((line) => line.trim().length > 0).length;
+}
+
+const vcsCache = new Map<string, { status: VcsStatus; refreshedAt: number }>();
+const vcsCacheTtlMs = 30_000;
+
 function isGitRepo(projectPath: string): boolean {
   return run("git", ["rev-parse", "--is-inside-work-tree"], projectPath) === "true";
 }
 
 function gitStatus(projectPath: string): VcsStatus {
-  const branch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], projectPath) || "unknown";
-  const porcelain = run("git", ["status", "--porcelain"], projectPath);
+  const statusBranch = run("git", ["status", "--porcelain=v1", "--branch"], projectPath);
+  const lines = statusBranch.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const header = lines.find((line) => line.startsWith("##")) ?? "";
+  const changeLines = lines.filter((line) => !line.startsWith("##"));
+  const localChangesCount = changeLines.length;
+  const branchMatch = header.match(/^##\s+([^\s.]+)/);
+  const fallbackBranch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], projectPath);
+  const branch = (branchMatch?.[1] ?? fallbackBranch) || "unknown";
+
+  const aheadMatch = header.match(/ahead (\d+)/i);
+  const behindMatch = header.match(/behind (\d+)/i);
+  const outgoingCount = aheadMatch ? Number.parseInt(aheadMatch[1], 10) : 0;
+  const incomingCount = behindMatch ? Number.parseInt(behindMatch[1], 10) : 0;
+  const nowIso = new Date().toISOString();
+
   return {
+    providerId: "git",
+    icon: "git",
     kind: "Git",
     branchOrStream: branch,
-    state: porcelain ? "dirty" : "clean",
+    state: localChangesCount > 0 ? "dirty" : "clean",
+    localChangesCount,
+    incomingCount,
+    outgoingCount,
+    pendingWorkItemsCount: null,
+    lastRefreshIso: nowIso,
+    message: localChangesCount > 0 ? "Local changes detected" : "Clean working tree",
+    supports: {
+      incomingOutgoing: true,
+      pendingWorkItems: false,
+    },
   };
 }
 
@@ -305,17 +340,48 @@ function perforceStatus(projectPath: string): VcsStatus {
   const streamLine = run("p4", ["-d", projectPath, "client", "-o"], projectPath)
     .split(/\r?\n/)
     .find((line) => line.startsWith("Stream:"));
-  const opened = run("p4", ["-d", projectPath, "opened", "-m", "1"], projectPath);
+  const opened = run("p4", ["-d", projectPath, "opened", "-m", "200"], projectPath);
+  const pendingChanges = run("p4", ["-d", projectPath, "changes", "-s", "pending", "-m", "25"], projectPath);
+  const localChangesCount = countNonEmptyLines(opened);
+  const pendingWorkItemsCount = countNonEmptyLines(pendingChanges);
+  const nowIso = new Date().toISOString();
   return {
+    providerId: "perforce",
+    icon: "perforce",
     kind: "Perforce",
     branchOrStream: streamLine ? streamLine.replace("Stream:", "").trim() : "workspace",
-    state: opened ? "dirty" : "clean",
+    state: localChangesCount > 0 ? "dirty" : "clean",
+    localChangesCount,
+    incomingCount: null,
+    outgoingCount: null,
+    pendingWorkItemsCount,
+    lastRefreshIso: nowIso,
+    message: localChangesCount > 0 ? "Opened files detected" : "No opened files",
+    supports: {
+      incomingOutgoing: false,
+      pendingWorkItems: true,
+    },
   };
 }
 
-function getVcsStatus(projectPath: string): VcsStatus {
+function computeVcsStatus(projectPath: string): VcsStatus {
   if (!existsSync(projectPath)) {
-    return { kind: "None", branchOrStream: "", state: "missing path" };
+    return {
+      providerId: "none",
+      icon: "none",
+      kind: "None",
+      branchOrStream: "",
+      state: "missing path",
+      localChangesCount: 0,
+      incomingCount: null,
+      outgoingCount: null,
+      pendingWorkItemsCount: null,
+      lastRefreshIso: new Date().toISOString(),
+      supports: {
+        incomingOutgoing: false,
+        pendingWorkItems: false,
+      },
+    };
   }
   if (isGitRepo(projectPath)) {
     return gitStatus(projectPath);
@@ -323,7 +389,47 @@ function getVcsStatus(projectPath: string): VcsStatus {
   if (isPerforce(projectPath)) {
     return perforceStatus(projectPath);
   }
-  return { kind: "None", branchOrStream: "", state: "not detected" };
+  return {
+    providerId: "none",
+    icon: "none",
+    kind: "None",
+    branchOrStream: "",
+    state: "not detected",
+    localChangesCount: 0,
+    incomingCount: null,
+    outgoingCount: null,
+    pendingWorkItemsCount: null,
+    lastRefreshIso: new Date().toISOString(),
+    supports: {
+      incomingOutgoing: false,
+      pendingWorkItems: false,
+    },
+  };
+}
+
+function getVcsStatus(projectPath: string): VcsStatus {
+  const cacheKey = normalizePath(projectPath);
+  const cached = vcsCache.get(cacheKey);
+  const now = Date.now();
+  if (cached && now - cached.refreshedAt < vcsCacheTtlMs) {
+    return cached.status;
+  }
+  const status = computeVcsStatus(projectPath);
+  vcsCache.set(cacheKey, { status, refreshedAt: now });
+  return status;
+}
+
+function refreshVcsStatus(projectPath: string): VcsStatus {
+  if (isGitRepo(projectPath)) {
+    spawnSync("git", ["fetch", "--prune", "--quiet"], {
+      cwd: projectPath,
+      encoding: "utf-8",
+      timeout: 15000,
+    });
+  }
+  const status = computeVcsStatus(projectPath);
+  vcsCache.set(normalizePath(projectPath), { status, refreshedAt: Date.now() });
+  return status;
 }
 
 function projectIsOpen(projectPath: string): boolean {
@@ -513,6 +619,7 @@ app.whenReady().then(() => {
   ipcMain.handle("projects:removeMissing", () => removeMissingProjects());
   ipcMain.handle("unity:detectVersion", (_event, projectPath: string) => detectUnityVersion(projectPath));
   ipcMain.handle("vcs:status", (_event, projectPath: string) => getVcsStatus(projectPath));
+  ipcMain.handle("vcs:refresh", (_event, projectPath: string) => refreshVcsStatus(projectPath));
   ipcMain.handle("unity:installs", () => getUnityInstalls());
   ipcMain.handle("unity:launchOrFocus", (_event, project: ProjectEntry) => {
     const result = launchProject(project);
