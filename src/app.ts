@@ -71,6 +71,30 @@ function normalizePath(inputPath: string): string {
   return process.platform === "win32" ? resolved.toLowerCase() : resolved;
 }
 
+function normalizeUrlKey(value: string): string {
+  return value.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+function parseGitHubRepoKeyFromUrl(remoteUrl: string): string {
+  const value = remoteUrl.trim();
+  if (!value) {
+    return "";
+  }
+  const https = value.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
+  if (https) {
+    return `${https[1]}/${https[2]}`.toLowerCase();
+  }
+  const scp = value.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  if (scp) {
+    return `${scp[1]}/${scp[2]}`.toLowerCase();
+  }
+  const ssh = value.match(/^ssh:\/\/git@github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
+  if (ssh) {
+    return `${ssh[1]}/${ssh[2]}`.toLowerCase();
+  }
+  return "";
+}
+
 function emptyStore(): StoreShape {
   return {
     projects: [],
@@ -1531,13 +1555,26 @@ function upsertProject(incoming: ProjectEntry): ProjectEntry[] {
   if (!project.unityVersion.trim()) {
     project.unityVersion = detectUnityVersion(project.path);
   }
+  if (!(project.cloudRepo ?? "").trim() && project.path.trim()) {
+    project.cloudRepo = inferCloudRepoFromProjectPath(project.path);
+  }
 
-  const idx = store.projects.findIndex((x) => x.id === project.id);
+  const normalizedProjectPath = project.path.trim() ? normalizePath(project.path) : "";
+  const idx = store.projects.findIndex((x) => {
+    if (x.id === project.id) {
+      return true;
+    }
+    if (!normalizedProjectPath || !x.path.trim()) {
+      return false;
+    }
+    return normalizePath(x.path) === normalizedProjectPath;
+  });
   if (idx >= 0) {
     store.projects[idx] = project;
   } else {
     store.projects.push(project);
   }
+  store.projects = dedupeLocalProjects(store.projects);
   saveStore(store);
   return store.projects;
 }
@@ -1578,6 +1615,58 @@ function getProjectRemoteUrl(projectPath: string): string {
   }
   const remote = run("git", ["config", "--get", "remote.origin.url"], projectPath);
   return normalizeRemoteUrlForBrowser(remote);
+}
+
+function inferCloudRepoFromProjectPath(projectPath: string): string {
+  if (!projectPath.trim() || !existsSync(projectPath) || !isGitRepo(projectPath)) {
+    return "";
+  }
+  const remote = run("git", ["config", "--get", "remote.origin.url"], projectPath);
+  return parseGitHubRepoKeyFromUrl(remote);
+}
+
+function dedupeLocalProjects(projects: ProjectEntry[]): ProjectEntry[] {
+  const seen = new Set<string>();
+  const deduped: ProjectEntry[] = [];
+  for (const project of projects) {
+    const pathKey = project.path.trim() ? `path:${normalizePath(project.path)}` : "";
+    const cloudKey = (project.cloudRepo ?? "").trim() ? `cloud:${(project.cloudRepo ?? "").trim().toLowerCase()}` : "";
+    const cloneKey = (project.cloneUrl ?? "").trim() ? `clone:${normalizeUrlKey(project.cloneUrl ?? "")}` : "";
+    const key = pathKey || cloudKey || cloneKey || `id:${project.id}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(project);
+  }
+  return deduped;
+}
+
+function getNormalizedLocalProjects(): ProjectEntry[] {
+  const store = loadStore();
+  let changed = false;
+  const normalized = dedupeLocalProjects(store.projects).map((project) => {
+    let next = project;
+    if (!(project.cloudRepo ?? "").trim() && project.path.trim()) {
+      const inferred = inferCloudRepoFromProjectPath(project.path);
+      if (inferred) {
+        next = { ...project, cloudRepo: inferred };
+        changed = true;
+      }
+    }
+    return next;
+  });
+
+  const sameLength = normalized.length === store.projects.length;
+  if (!sameLength) {
+    changed = true;
+  }
+
+  if (changed) {
+    store.projects = normalized;
+    saveStore(store);
+  }
+  return normalized;
 }
 
 function openExternalUrl(targetUrl: string): { ok: boolean; message: string } {
@@ -1787,7 +1876,7 @@ app.whenReady().then(() => {
   const bootstrapped = bootstrapFromHubOnFirstRun(store);
   saveStore(bootstrapped);
 
-  ipcMain.handle("projects:get", () => loadStore().projects);
+  ipcMain.handle("projects:get", () => getNormalizedLocalProjects());
   ipcMain.handle("projects:getCloud", async () => {
     await refreshCloudProjectMetadata(false);
     return getCloudProjects();
