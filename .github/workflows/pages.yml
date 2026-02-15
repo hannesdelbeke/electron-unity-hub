@@ -5,6 +5,14 @@ on:
     branches:
       - main
       - master
+    paths:
+      - "src/renderer/**"
+      - "src/types.ts"
+      - "scripts/build-pages.mjs"
+      - "scripts/pages/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
   workflow_dispatch:
 
 permissions:
