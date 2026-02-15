@@ -10,9 +10,22 @@ permissions:
   contents: write
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            packageScript: package:win
+            artifactName: electron-unity-hub-windows
+          - os: macos-latest
+            packageScript: package:mac
+            artifactName: electron-unity-hub-macos
+          - os: ubuntu-latest
+            packageScript: package:linux
+            artifactName: electron-unity-hub-linux
 
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,76 +40,12 @@ jobs:
         run: npm ci
 
       - name: Build desktop app
-        run: npm run package:win
+        run: npm run ${{ matrix.packageScript }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: electron-unity-hub-windows
-          path: release/*
-          if-no-files-found: error
-
-      - name: Attach build files to GitHub Release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release/*
-
-  build-macos:
-    runs-on: macos-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build desktop app
-        run: npm run package:mac
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: electron-unity-hub-macos
-          path: release/*
-          if-no-files-found: error
-
-      - name: Attach build files to GitHub Release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: release/*
-
-  build-linux:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build desktop app
-        run: npm run package:linux
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: electron-unity-hub-linux
+          name: ${{ matrix.artifactName }}
           path: release/*
           if-no-files-found: error
 
