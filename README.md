@@ -1,11 +1,10 @@
-﻿# Unity Launcher (MVP)
+﻿# Unity Launcher - Electron
+A more minimalistic Unity project launcher.  
+[Test it in your browser](https://hannesdelbeke.github.io/electron-unity-hub/) with mock data.  
 
 ![Launcher Preview](./docs/launcher-preview.svg)
 
-A lightweight Unity project launcher focused on projects, not cloud/learning tabs.
-
-Live demo (mock data): https://hannesdelbeke.github.io/electron-unity-hub/
-
+## Dev notes
 Project development instructions and architecture: [DEV.md](./DEV.md)
 
 Project TODOs are intentionally kept out of `DEV.md`. Use [TODO.md](./TODO.md) for task tracking.
@@ -18,18 +17,20 @@ Project TODOs are intentionally kept out of `DEV.md`. Use [TODO.md](./TODO.md) f
 - Unity editor version detection (`ProjectSettings/ProjectVersion.txt`) with override field
 - Last opened timestamp
 - Source control status (Git + Perforce detection)
-- Optional first-run import from Unity Hub cache (if Hub is installed)
 - Unity installs list with click-to-launch editor
-- Theme setting: Match System, Dark, Light
-- Open behavior for already-open projects:
-  - If project appears open (`Temp/UnityLockfile`), the app attempts to focus that Unity window instead of launching a duplicate
+- Dark & Light theme
+- auto detect
+  - Imports your project list from Unity Hub
+  - Imports your editor installs from Hub
+  - searches program files for editor installs
+- If project appears open (`Temp/UnityLockfile`), the app attempts to focus that Unity window instead of launching a duplicate
 - Launch with a configured Unity executable path
 
 ## Requirements
 
 - Node.js 20+
 - npm 10+
-- Windows/macOS/Linux (window focusing is currently implemented for Windows only)
+- Windows/macOS/Linux (window focusing is Windows only)
 
 ## Run
 
