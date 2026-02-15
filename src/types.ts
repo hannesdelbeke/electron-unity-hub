@@ -14,21 +14,28 @@ export type VcsStatus = {
   state: string;
 };
 
+export type UnityInstall = {
+  version: string;
+  path: string;
+  source: string;
+  exists: boolean;
+};
+
 declare global {
   interface Window {
     launcherApi: {
       getProjects: () => Promise<ProjectEntry[]>;
       saveProject: (project: ProjectEntry) => Promise<ProjectEntry[]>;
       deleteProject: (id: string) => Promise<ProjectEntry[]>;
+      removeMissingProjects: () => Promise<{ removed: number; remaining: number }>;
       detectUnityVersion: (projectPath: string) => Promise<string>;
       getVcsStatus: (projectPath: string) => Promise<VcsStatus>;
+      getUnityInstalls: () => Promise<UnityInstall[]>;
       launchOrFocus: (project: ProjectEntry) => Promise<{ ok: boolean; message: string; focused?: boolean }>;
-      openUnityHub: () => Promise<void>;
-      openUnityDownload: () => Promise<void>;
+      launchUnityEditor: (editorPath: string) => Promise<{ ok: boolean; message: string }>;
       pickDirectory: () => Promise<string>;
       pickFile: () => Promise<string>;
       cloneRepo: (repoUrl: string, targetDir: string, branch: string) => Promise<{ ok: boolean; message: string }>;
-      importProjectsFromUnityHub: () => Promise<{ imported: number; total: number; source: string }>;
     };
   }
 }

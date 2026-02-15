@@ -1,6 +1,6 @@
 ﻿# Unity Launcher (MVP)
 
-![Launcher Preview](./docs/launcher-preview.svg)
+![Launcher Preview](./docs/launcher-preview.png)
 
 A lightweight Unity project launcher focused on projects, not cloud/learning tabs.
 
@@ -12,11 +12,15 @@ Project TODOs are intentionally kept out of `DEV.md`. Use [TODO.md](./TODO.md) f
 
 ## Implemented features
 
+- Left sidebar tabs: Projects, Unity Installs, Settings
 - Project nickname support (including multiple entries for the same project path)
 - Project name, path
 - Unity editor version detection (`ProjectSettings/ProjectVersion.txt`) with override field
 - Last opened timestamp
 - Source control status (Git + Perforce detection)
+- Optional first-run import from Unity Hub cache (if Hub is installed)
+- Unity installs list with click-to-launch editor
+- Theme setting: Match System, Dark, Light
 - Open behavior for already-open projects:
   - If project appears open (`Temp/UnityLockfile`), the app attempts to focus that Unity window instead of launching a duplicate
 - Launch with a configured Unity executable path

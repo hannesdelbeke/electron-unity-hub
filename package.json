@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "unity-launcher",
   "version": "1.0.0",
   "description": "Lightweight Unity project launcher",
@@ -7,15 +7,18 @@
     "build": "tsc && node -e \"const fs=require('fs');fs.mkdirSync('dist/renderer/assets',{recursive:true});fs.copyFileSync('src/renderer/index.html','dist/renderer/index.html');fs.copyFileSync('src/renderer/styles.css','dist/renderer/styles.css');fs.copyFileSync('src/renderer/assets/unityhub.png','dist/renderer/assets/unityhub.png');\"",
     "start": "npm run build && electron .",
     "dev": "npm run start",
+    "test:e2e": "npm run build && playwright test",
     "package:win": "npm run build && electron-builder --win portable --publish never"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {},
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@types/node": "^24.4.0",
     "electron": "^37.6.0",
     "electron-builder": "^26.0.12",
+    "playwright": "^1.55.0",
     "typescript": "^5.9.2"
   },
   "build": {

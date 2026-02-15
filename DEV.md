@@ -7,7 +7,31 @@ This file contains development guidelines and architecture notes for this projec
 ## Purpose
 
 - Build a minimal Unity project launcher with strong project-centric UX.
-- Keep Unity Hub for installs/new-project creation, while this app focuses on launching and project management.
+- Do not require Unity Hub for normal operation.
+- On first run only, import Unity Hub projects/install metadata when Hub is installed.
+
+## Current Product Requirements
+
+- Left sidebar tabs:
+  - `Projects`
+  - `Unity Installs`
+  - `Settings` (anchored bottom-left)
+- Projects list:
+  - Show `nickname` when present, otherwise show project `name`.
+  - Single-click row launches/focuses project.
+  - Show red warning for missing project path.
+- Unity installs list:
+  - Single-click row launches editor executable.
+  - Show red warning for missing executable path.
+- Settings:
+  - Theme mode selector: `Match System`, `Dark`, `Light`.
+  - Remove missing projects action.
+- Add/New project UX:
+  - Keep forms hidden by default.
+  - Use dialogs from `Add` menu and `New Project` action only.
+- First-run bootstrap:
+  - If Unity Hub cache exists, import projects and editor metadata once.
+  - Launcher must still function fully when Hub is not installed.
 
 ## Architecture
 
@@ -69,9 +93,6 @@ Use this checklist after major UI or behavior updates:
 - Confirm README links/screenshots still match current behavior.
 - Confirm GitHub Actions build succeeds and produces downloadable app artifacts.
 
-Temporary exception:
-- The next major desktop change may be merged once without updating GitHub Pages preview (one-time exception requested). Resume normal preview updates after that.
-
 ## Commit Policy
 
 - Include a Codex co-author trailer on commits made with Codex assistance.
@@ -105,9 +126,34 @@ npm run package:win
 - Trigger: pushes to `main` and `master` (plus manual dispatch)
 - Output: downloadable Windows build artifact from the `release/` folder
 
+## Testing (AI Agent Instructions)
+
+For Codex/Claude-style agents, use this flow when validating UI behavior:
+
+- Install dependencies first:
+  - `npm install`
+- Build desktop assets:
+  - `npm run build`
+- Run Electron E2E tests:
+  - `npm run test:e2e`
+
+Playwright setup notes (high level):
+
+- This project uses Playwright + Electron for real UI interaction tests.
+- Test config is in `playwright.config.ts`.
+- Test files live in `tests/e2e/`.
+- If Playwright binaries are missing in a new environment, run:
+  - `npx playwright install`
+
+Expected outcome:
+
+- E2E tests should verify key interactions like opening the `Add` menu and triggering `New Project`.
+- If tests fail, prefer fixing renderer event wiring and null-safety before changing test assertions.
+ 
 Static demo local preview:
 
 ```bash
 cd docs
 python -m http.server 8080
 ```
+

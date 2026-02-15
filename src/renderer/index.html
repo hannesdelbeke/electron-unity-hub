@@ -7,51 +7,115 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <main class="app">
-    <section class="toolbar">
-      <div class="title-wrap">
-        <h1>Projects</h1>
-        <div class="project-menu-wrap">
-          <button id="project-menu-toggle" class="btn icon-btn" title="Project menu" aria-label="Project menu">☰</button>
-          <div id="project-menu" class="menu hidden">
-            <button id="project-settings" class="menu-item">Settings</button>
-            <button id="project-remove" class="menu-item">Remove selected</button>
+  <main class="shell">
+    <aside class="sidebar">
+      <button id="tab-projects" class="side-tab active">Projects</button>
+      <button id="tab-installs" class="side-tab">Unity Installs</button>
+      <div class="side-spacer"></div>
+      <button id="tab-settings" class="side-tab">Settings</button>
+    </aside>
+
+    <section class="content">
+      <section id="view-projects" class="view active">
+        <section class="toolbar">
+          <h1>Projects</h1>
+          <div class="projects-more-wrap">
+            <button id="projects-more-toggle" class="icon-btn" aria-label="Project menu">...</button>
+            <div id="projects-more-menu" class="menu hidden">
+              <button id="projects-menu-settings" class="menu-item">Open settings</button>
+              <button id="projects-menu-remove" class="menu-item">Remove selected project</button>
+            </div>
           </div>
-        </div>
-      </div>
-      <input id="search" type="search" placeholder="Search projects" />
-      <div class="add-wrap">
-        <button id="add-toggle" class="btn">Add</button>
-        <div id="add-menu" class="menu hidden">
-          <button id="add-disk" class="menu-item">Add from disk</button>
-          <button id="add-repo" class="menu-item">Add from repo</button>
-          <button id="add-hub" class="menu-item">Import from Hub</button>
-        </div>
-      </div>
-      <button id="new-project" class="btn accent">New Project</button>
-    </section>
+          <input id="search" type="search" placeholder="Search projects" />
+          <div class="add-wrap">
+            <button id="add-toggle" class="btn">Add</button>
+            <div id="add-menu" class="menu hidden">
+              <button id="add-disk" class="menu-item">Add from disk</button>
+              <button id="add-repo" class="menu-item">Add from repo</button>
+            </div>
+          </div>
+          <button id="new-project" class="btn accent">New Project</button>
+        </section>
 
-    <section class="projects-panel">
-      <table id="projects-table">
-        <thead>
-          <tr>
-            <th>Nickname</th>
-            <th>Project</th>
-            <th>Path</th>
-            <th>Editor Version</th>
-            <th>Source Control</th>
-            <th>Modified / Last Opened</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
+        <section class="projects-panel">
+          <table id="projects-table">
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Path</th>
+                <th>Editor Version</th>
+                <th>Source Control</th>
+                <th>Modified / Last Opened</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
 
-    <section class="footer-actions">
-      <button id="launch-btn" class="btn">Launch / Focus</button>
-      <button id="delete-btn" class="btn danger">Remove</button>
-      <button id="refresh-btn" class="btn">Refresh</button>
-      <span id="status">Ready</span>
+        <section class="footer-actions">
+          <button id="delete-btn" class="btn danger">Remove</button>
+          <button id="refresh-btn" class="btn">Refresh</button>
+          <span id="status">Ready</span>
+        </section>
+      </section>
+
+      <section id="view-installs" class="view">
+        <section class="toolbar installs-toolbar">
+          <h1>Unity Installs</h1>
+          <button id="refresh-installs" class="btn">Refresh Installs</button>
+        </section>
+
+        <section class="projects-panel">
+          <table id="installs-table">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Path</th>
+                <th>Source</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+
+        <section class="footer-actions installs-footer">
+          <span class="muted">Click an install row to launch that editor.</span>
+        </section>
+      </section>
+
+      <section id="view-settings" class="view">
+        <section class="toolbar installs-toolbar">
+          <h1>Settings</h1>
+        </section>
+
+        <section class="settings-panel">
+          <label>Default Unity executable
+            <div class="input-row">
+              <input id="settings-default-unity-exe" type="text" placeholder="Optional" />
+              <button id="settings-browse-exe" type="button" class="btn">Browse</button>
+            </div>
+          </label>
+
+          <label>Theme
+            <select id="settings-theme" class="theme-select">
+              <option value="system">Match System</option>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+          </label>
+
+          <div class="settings-actions">
+            <button id="settings-save" class="btn accent">Save Settings</button>
+            <button id="settings-remove-missing" class="btn danger">Remove Missing Projects</button>
+          </div>
+        </section>
+
+        <section class="footer-actions installs-footer">
+          <span class="muted">Theme changes apply immediately after saving.</span>
+        </section>
+      </section>
     </section>
   </main>
 
@@ -60,7 +124,7 @@
       <h2>Add from disk</h2>
       <label>Project folder
         <div class="input-row">
-          <input id="disk-path" type="text" required />
+          <input id="disk-path" type="text" />
           <button id="disk-browse-path" type="button" class="btn">Browse</button>
         </div>
       </label>
@@ -74,8 +138,8 @@
         </div>
       </label>
       <menu>
-        <button value="cancel" class="btn" formnovalidate>Cancel</button>
-        <button id="disk-save" value="default" class="btn accent">Add project</button>
+        <button value="cancel" type="button" class="btn" onclick="this.closest('dialog')?.close()">Cancel</button>
+        <button id="disk-save" value="default" type="button" class="btn accent">Add project</button>
       </menu>
     </form>
   </dialog>
@@ -84,14 +148,14 @@
     <form method="dialog" id="repo-form" class="modal-form">
       <h2>Add from repo</h2>
       <label>Repository URL
-        <input id="repo-url" type="text" required />
+        <input id="repo-url" type="text" />
       </label>
       <label>Branch (optional)
         <input id="repo-branch" type="text" />
       </label>
       <label>Clone to folder
         <div class="input-row">
-          <input id="repo-target" type="text" required />
+          <input id="repo-target" type="text" />
           <button id="repo-browse-target" type="button" class="btn">Browse</button>
         </div>
       </label>
@@ -105,24 +169,8 @@
         </div>
       </label>
       <menu>
-        <button value="cancel" class="btn" formnovalidate>Cancel</button>
-        <button id="repo-save" value="default" class="btn accent">Clone and add</button>
-      </menu>
-    </form>
-  </dialog>
-
-  <dialog id="settings-dialog" class="modal">
-    <form method="dialog" id="settings-form" class="modal-form">
-      <h2>Settings</h2>
-      <label>Default Unity executable
-        <div class="input-row">
-          <input id="settings-default-unity-exe" type="text" placeholder="Optional" />
-          <button id="settings-browse-exe" type="button" class="btn">Browse</button>
-        </div>
-      </label>
-      <menu>
-        <button value="cancel" class="btn" formnovalidate>Cancel</button>
-        <button id="settings-save" value="default" class="btn accent">Save</button>
+        <button value="cancel" type="button" class="btn" onclick="this.closest('dialog')?.close()">Cancel</button>
+        <button id="repo-save" value="default" type="button" class="btn accent">Clone and add</button>
       </menu>
     </form>
   </dialog>

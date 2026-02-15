@@ -1,37 +1,94 @@
-﻿import type { ProjectEntry, VcsStatus } from "../types";
+﻿type ProjectEntry = {
+  id: string;
+  nickname: string;
+  name: string;
+  path: string;
+  unityVersion: string;
+  unityExe: string;
+  lastOpenedIso: string;
+};
+
+type VcsStatus = {
+  kind: string;
+  branchOrStream: string;
+  state: string;
+};
+
+type UnityInstall = {
+  version: string;
+  path: string;
+  source: string;
+  exists: boolean;
+};
+
+type ThemePreference = "system" | "dark" | "light";
 
 const tbody = document.querySelector<HTMLTableSectionElement>("#projects-table tbody");
+const installsTbody = document.querySelector<HTMLTableSectionElement>("#installs-table tbody");
 const statusEl = document.getElementById("status");
-const searchInput = document.getElementById("search") as HTMLInputElement;
-const addToggle = document.getElementById("add-toggle") as HTMLButtonElement;
-const addMenu = document.getElementById("add-menu") as HTMLDivElement;
-const projectMenuToggle = document.getElementById("project-menu-toggle") as HTMLButtonElement;
-const projectMenu = document.getElementById("project-menu") as HTMLDivElement;
+const searchInput = document.getElementById("search") as HTMLInputElement | null;
+const addToggle = document.getElementById("add-toggle") as HTMLButtonElement | null;
+const addMenu = document.getElementById("add-menu") as HTMLDivElement | null;
+const projectsMoreToggle = document.getElementById("projects-more-toggle") as HTMLButtonElement | null;
+const projectsMoreMenu = document.getElementById("projects-more-menu") as HTMLDivElement | null;
 
-const diskDialog = document.getElementById("disk-dialog") as HTMLDialogElement;
-const repoDialog = document.getElementById("repo-dialog") as HTMLDialogElement;
-const settingsDialog = document.getElementById("settings-dialog") as HTMLDialogElement;
+const diskDialog = document.getElementById("disk-dialog") as HTMLDialogElement | null;
+const repoDialog = document.getElementById("repo-dialog") as HTMLDialogElement | null;
 
-const diskPath = document.getElementById("disk-path") as HTMLInputElement;
-const diskNickname = document.getElementById("disk-nickname") as HTMLInputElement;
-const diskUnityExe = document.getElementById("disk-unity-exe") as HTMLInputElement;
+const diskPath = document.getElementById("disk-path") as HTMLInputElement | null;
+const diskNickname = document.getElementById("disk-nickname") as HTMLInputElement | null;
+const diskUnityExe = document.getElementById("disk-unity-exe") as HTMLInputElement | null;
 
-const repoUrl = document.getElementById("repo-url") as HTMLInputElement;
-const repoBranch = document.getElementById("repo-branch") as HTMLInputElement;
-const repoTarget = document.getElementById("repo-target") as HTMLInputElement;
-const repoNickname = document.getElementById("repo-nickname") as HTMLInputElement;
-const repoUnityExe = document.getElementById("repo-unity-exe") as HTMLInputElement;
-const settingsDefaultUnityExe = document.getElementById("settings-default-unity-exe") as HTMLInputElement;
+const repoUrl = document.getElementById("repo-url") as HTMLInputElement | null;
+const repoBranch = document.getElementById("repo-branch") as HTMLInputElement | null;
+const repoTarget = document.getElementById("repo-target") as HTMLInputElement | null;
+const repoNickname = document.getElementById("repo-nickname") as HTMLInputElement | null;
+const repoUnityExe = document.getElementById("repo-unity-exe") as HTMLInputElement | null;
+
+const settingsDefaultUnityExe = document.getElementById("settings-default-unity-exe") as HTMLInputElement | null;
+const settingsTheme = document.getElementById("settings-theme") as HTMLSelectElement | null;
+
+const tabProjects = document.getElementById("tab-projects");
+const tabInstalls = document.getElementById("tab-installs");
+const tabSettings = document.getElementById("tab-settings");
+
+const viewProjects = document.getElementById("view-projects");
+const viewInstalls = document.getElementById("view-installs");
+const viewSettings = document.getElementById("view-settings");
 
 let projects: ProjectEntry[] = [];
+let installs: UnityInstall[] = [];
 let selectedId = "";
 let searchText = "";
+
 const defaultUnityExeKey = "unityLauncher.defaultUnityExe";
+const themePreferenceKey = "unityLauncher.themePreference";
+
+type TabName = "projects" | "installs" | "settings";
 
 function setStatus(msg: string): void {
   if (statusEl) {
     statusEl.textContent = msg;
   }
+}
+
+function applyTheme(pref: ThemePreference): void {
+  const root = document.documentElement;
+  if (pref === "system") {
+    root.removeAttribute("data-theme");
+  } else {
+    root.setAttribute("data-theme", pref);
+  }
+}
+
+function activateTab(tab: TabName): void {
+  tabProjects?.classList.toggle("active", tab === "projects");
+  tabInstalls?.classList.toggle("active", tab === "installs");
+  tabSettings?.classList.toggle("active", tab === "settings");
+
+  viewProjects?.classList.toggle("active", tab === "projects");
+  viewInstalls?.classList.toggle("active", tab === "installs");
+  viewSettings?.classList.toggle("active", tab === "settings");
 }
 
 function formatVcs(vcs: VcsStatus): string {
@@ -49,27 +106,40 @@ function formatLastOpened(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
+function warningLabel(missing: boolean): string {
+  return missing ? "<span class=\"warning-pill\">Missing</span>" : "";
+}
+
+function getDisplayName(project: ProjectEntry): string {
+  const nickname = project.nickname.trim();
+  if (nickname) {
+    return nickname;
+  }
+  return project.name;
+}
+
 function getFilteredProjects(): ProjectEntry[] {
   const q = searchText.trim().toLowerCase();
   if (!q) {
     return projects;
   }
-  return projects.filter((p) => {
-    return [p.nickname, p.name, p.path, p.unityVersion].some((v) => v.toLowerCase().includes(q));
-  });
+  return projects.filter((p) => [getDisplayName(p), p.name, p.path, p.unityVersion].some((v) => v.toLowerCase().includes(q)));
 }
 
 function closeAddMenu(): void {
-  addMenu.classList.add("hidden");
+  addMenu?.classList.add("hidden");
 }
 
-function closeProjectMenu(): void {
-  projectMenu.classList.add("hidden");
+function closeProjectsMenu(): void {
+  projectsMoreMenu?.classList.add("hidden");
 }
 
-function openDialog(dialogEl: HTMLDialogElement): void {
+function openDialog(dialogEl: HTMLDialogElement | null): void {
+  if (!dialogEl) {
+    return;
+  }
   closeAddMenu();
-  closeProjectMenu();
+  closeProjectsMenu();
   dialogEl.showModal();
 }
 
@@ -85,55 +155,123 @@ function createProjectEntry(partial: Partial<ProjectEntry>): ProjectEntry {
   };
 }
 
-async function renderTable(): Promise<void> {
+function requireValue(input: HTMLInputElement | null): string {
+  return input?.value.trim() ?? "";
+}
+
+async function launchProjectRow(project: ProjectEntry): Promise<void> {
+  const result = await window.launcherApi.launchOrFocus(project);
+  setStatus(result.message);
+  await refreshProjects(false);
+}
+
+async function renderProjectsTable(): Promise<void> {
   if (!tbody) {
     return;
   }
 
   tbody.innerHTML = "";
   const visible = getFilteredProjects();
+  const vcsByProject = await Promise.all(visible.map((project) => window.launcherApi.getVcsStatus(project.path)));
 
-  for (const project of visible) {
+  for (let i = 0; i < visible.length; i += 1) {
+    const project = visible[i];
     const tr = document.createElement("tr");
+    tr.classList.add("clickable");
     tr.dataset.id = project.id;
     if (project.id === selectedId) {
       tr.classList.add("selected");
     }
 
-    const vcs = await window.launcherApi.getVcsStatus(project.path);
-    const cells = [
-      project.nickname,
-      project.name,
+    const vcs = vcsByProject[i];
+    const isMissing = vcs.state === "missing path";
+
+    const values: Array<string> = [
+      getDisplayName(project),
       project.path,
       project.unityVersion,
       formatVcs(vcs),
       formatLastOpened(project.lastOpenedIso),
+      warningLabel(isMissing),
     ];
 
-    for (const value of cells) {
+    for (let i = 0; i < values.length; i += 1) {
       const td = document.createElement("td");
-      td.textContent = value;
+      if (i === values.length - 1) {
+        td.innerHTML = values[i];
+      } else {
+        td.textContent = values[i];
+      }
       tr.appendChild(td);
     }
 
-    tr.addEventListener("click", () => {
+    tr.addEventListener("click", async () => {
       selectedId = project.id;
-      void renderTable();
-    });
-
-    tr.addEventListener("dblclick", async () => {
-      selectedId = project.id;
-      await launchOrFocus();
+      if (isMissing) {
+        setStatus("Project path is missing");
+        return;
+      }
+      await launchProjectRow(project);
     });
 
     tbody.appendChild(tr);
   }
 }
 
-async function refreshProjects(): Promise<void> {
+function renderInstallsTable(): void {
+  if (!installsTbody) {
+    return;
+  }
+
+  installsTbody.innerHTML = "";
+  for (const install of installs) {
+    const tr = document.createElement("tr");
+    tr.classList.add("clickable");
+
+    const values: Array<string> = [
+      install.version,
+      install.path,
+      install.source,
+      warningLabel(!install.exists),
+    ];
+
+    for (let i = 0; i < values.length; i += 1) {
+      const td = document.createElement("td");
+      if (i === values.length - 1) {
+        td.innerHTML = values[i];
+      } else {
+        td.textContent = values[i];
+      }
+      tr.appendChild(td);
+    }
+
+    tr.addEventListener("click", async () => {
+      if (!install.exists) {
+        setStatus("Unity install path is missing");
+        return;
+      }
+      const result = await window.launcherApi.launchUnityEditor(install.path);
+      setStatus(result.message);
+    });
+
+    installsTbody.appendChild(tr);
+  }
+}
+
+async function refreshProjects(updateStatus = true): Promise<void> {
   projects = await window.launcherApi.getProjects();
-  await renderTable();
-  setStatus(`Loaded ${projects.length} projects`);
+  await renderProjectsTable();
+  if (updateStatus) {
+    setStatus(`Loaded ${projects.length} projects`);
+  }
+}
+
+async function refreshInstalls(updateStatus = true): Promise<void> {
+  installs = await window.launcherApi.getUnityInstalls();
+  renderInstallsTable();
+  if (updateStatus) {
+    setStatus("Unity installs refreshed");
+  }
 }
 
 async function saveProject(project: ProjectEntry): Promise<void> {
@@ -142,11 +280,11 @@ async function saveProject(project: ProjectEntry): Promise<void> {
     project.lastOpenedIso = existing.lastOpenedIso;
   }
   projects = await window.launcherApi.saveProject(project);
-  await renderTable();
+  await renderProjectsTable();
 }
 
 async function addFromDisk(): Promise<void> {
-  const projectPath = diskPath.value.trim();
+  const projectPath = requireValue(diskPath);
   if (!projectPath) {
     setStatus("Project folder is required");
     return;
@@ -158,23 +296,23 @@ async function addFromDisk(): Promise<void> {
   const project = createProjectEntry({
     path: projectPath,
     name: inferredName,
-    nickname: diskNickname.value.trim() || inferredName,
+    nickname: requireValue(diskNickname),
     unityVersion: version,
-    unityExe: diskUnityExe.value.trim() || settingsDefaultUnityExe.value.trim(),
+    unityExe: requireValue(diskUnityExe) || requireValue(settingsDefaultUnityExe),
   });
 
   await saveProject(project);
-  diskDialog.close();
-  diskPath.value = "";
-  diskNickname.value = "";
-  diskUnityExe.value = "";
+  diskDialog?.close();
+  if (diskPath) diskPath.value = "";
+  if (diskNickname) diskNickname.value = "";
+  if (diskUnityExe) diskUnityExe.value = "";
   setStatus("Added project from disk");
 }
 
 async function addFromRepo(): Promise<void> {
-  const url = repoUrl.value.trim();
-  const target = repoTarget.value.trim();
-  const branch = repoBranch.value.trim();
+  const url = requireValue(repoUrl);
+  const target = requireValue(repoTarget);
+  const branch = requireValue(repoBranch);
 
   if (!url || !target) {
     setStatus("Repository URL and target folder are required");
@@ -194,88 +332,87 @@ async function addFromRepo(): Promise<void> {
   const project = createProjectEntry({
     path: target,
     name: inferredName,
-    nickname: repoNickname.value.trim() || inferredName,
+    nickname: requireValue(repoNickname),
     unityVersion: version,
-    unityExe: repoUnityExe.value.trim() || settingsDefaultUnityExe.value.trim(),
+    unityExe: requireValue(repoUnityExe) || requireValue(settingsDefaultUnityExe),
   });
 
   await saveProject(project);
-  repoDialog.close();
-  repoUrl.value = "";
-  repoBranch.value = "";
-  repoTarget.value = "";
-  repoNickname.value = "";
-  repoUnityExe.value = "";
+  repoDialog?.close();
+  if (repoUrl) repoUrl.value = "";
+  if (repoBranch) repoBranch.value = "";
+  if (repoTarget) repoTarget.value = "";
+  if (repoNickname) repoNickname.value = "";
+  if (repoUnityExe) repoUnityExe.value = "";
   setStatus("Repository cloned and project added");
-}
-
-async function launchOrFocus(): Promise<void> {
-  if (!selectedId) {
-    setStatus("Select a project first");
-    return;
-  }
-
-  const project = projects.find((p) => p.id === selectedId);
-  if (!project) {
-    setStatus("Selected project no longer exists");
-    return;
-  }
-
-  const result = await window.launcherApi.launchOrFocus(project);
-  setStatus(result.message);
-  await refreshProjects();
 }
 
 async function removeSelectedProject(): Promise<void> {
   if (!selectedId) {
-    setStatus("Select a project first");
+    setStatus("Select a project by clicking a row first");
     return;
   }
   projects = await window.launcherApi.deleteProject(selectedId);
   selectedId = "";
-  await renderTable();
+  await renderProjectsTable();
   setStatus("Project removed");
 }
 
+function wireSidebarTabs(): void {
+  tabProjects?.addEventListener("click", () => activateTab("projects"));
+  tabInstalls?.addEventListener("click", async () => {
+    activateTab("installs");
+    await refreshInstalls(false);
+  });
+  tabSettings?.addEventListener("click", () => activateTab("settings"));
+}
+
 function wireGlobalEvents(): void {
-  addToggle.addEventListener("click", () => {
-    addMenu.classList.toggle("hidden");
-    closeProjectMenu();
+  addToggle?.addEventListener("click", () => {
+    addMenu?.classList.toggle("hidden");
+    closeProjectsMenu();
   });
 
-  projectMenuToggle.addEventListener("click", () => {
-    projectMenu.classList.toggle("hidden");
+  projectsMoreToggle?.addEventListener("click", () => {
+    projectsMoreMenu?.classList.toggle("hidden");
     closeAddMenu();
   });
 
   document.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
     if (!target.closest(".add-wrap")) {
       closeAddMenu();
     }
-    if (!target.closest(".project-menu-wrap")) {
-      closeProjectMenu();
+    if (!target.closest(".projects-more-wrap")) {
+      closeProjectsMenu();
     }
   });
 
-  searchInput.addEventListener("input", () => {
+  searchInput?.addEventListener("input", () => {
     searchText = searchInput.value;
-    void renderTable();
+    void renderProjectsTable();
   });
 
-  document.getElementById("launch-btn")?.addEventListener("click", () => void launchOrFocus());
   document.getElementById("delete-btn")?.addEventListener("click", () => void removeSelectedProject());
   document.getElementById("refresh-btn")?.addEventListener("click", () => void refreshProjects());
+  document.getElementById("refresh-installs")?.addEventListener("click", () => void refreshInstalls());
 
   document.getElementById("new-project")?.addEventListener("click", () => {
-    void window.launcherApi.openUnityHub();
-    setStatus("Opened Unity Hub for new project creation");
+    openDialog(diskDialog);
+    setStatus("New project: choose a local project folder");
   });
-  document.getElementById("project-settings")?.addEventListener("click", () => openDialog(settingsDialog));
-  document.getElementById("project-remove")?.addEventListener("click", () => void removeSelectedProject());
-  document.getElementById("add-hub")?.addEventListener("click", () => {
-    closeAddMenu();
-    setStatus("Import from Hub will be wired next.");
+
+  document.getElementById("projects-menu-settings")?.addEventListener("click", () => {
+    closeProjectsMenu();
+    activateTab("settings");
+  });
+
+  document.getElementById("projects-menu-remove")?.addEventListener("click", () => {
+    closeProjectsMenu();
+    void removeSelectedProject();
   });
 }
 
@@ -284,14 +421,14 @@ function wireDiskDialog(): void {
 
   document.getElementById("disk-browse-path")?.addEventListener("click", async () => {
     const dir = await window.launcherApi.pickDirectory();
-    if (dir) {
+    if (dir && diskPath) {
       diskPath.value = dir;
     }
   });
 
   document.getElementById("disk-browse-exe")?.addEventListener("click", async () => {
     const file = await window.launcherApi.pickFile();
-    if (file) {
+    if (file && diskUnityExe) {
       diskUnityExe.value = file;
     }
   });
@@ -307,14 +444,14 @@ function wireRepoDialog(): void {
 
   document.getElementById("repo-browse-target")?.addEventListener("click", async () => {
     const dir = await window.launcherApi.pickDirectory();
-    if (dir) {
+    if (dir && repoTarget) {
       repoTarget.value = dir;
     }
   });
 
   document.getElementById("repo-browse-exe")?.addEventListener("click", async () => {
     const file = await window.launcherApi.pickFile();
-    if (file) {
+    if (file && repoUnityExe) {
       repoUnityExe.value = file;
     }
   });
@@ -325,33 +462,52 @@ function wireRepoDialog(): void {
   });
 }
 
-function wireSettingsDialog(): void {
-  const saved = localStorage.getItem(defaultUnityExeKey);
-  if (saved) {
-    settingsDefaultUnityExe.value = saved;
+function wireSettingsView(): void {
+  const savedExe = localStorage.getItem(defaultUnityExeKey);
+  if (savedExe && settingsDefaultUnityExe) {
+    settingsDefaultUnityExe.value = savedExe;
   }
+
+  const savedTheme = (localStorage.getItem(themePreferenceKey) as ThemePreference | null) ?? "system";
+  if (settingsTheme) {
+    settingsTheme.value = savedTheme;
+  }
+  applyTheme(savedTheme);
 
   document.getElementById("settings-browse-exe")?.addEventListener("click", async () => {
     const file = await window.launcherApi.pickFile();
-    if (file) {
+    if (file && settingsDefaultUnityExe) {
       settingsDefaultUnityExe.value = file;
     }
   });
 
-  document.getElementById("settings-save")?.addEventListener("click", (event) => {
-    event.preventDefault();
-    localStorage.setItem(defaultUnityExeKey, settingsDefaultUnityExe.value.trim());
-    settingsDialog.close();
+  document.getElementById("settings-save")?.addEventListener("click", () => {
+    localStorage.setItem(defaultUnityExeKey, requireValue(settingsDefaultUnityExe));
+    const pref = (settingsTheme?.value as ThemePreference) || "system";
+    localStorage.setItem(themePreferenceKey, pref);
+    applyTheme(pref);
     setStatus("Settings saved");
+  });
+
+  document.getElementById("settings-remove-missing")?.addEventListener("click", async () => {
+    const result = await window.launcherApi.removeMissingProjects();
+    await refreshProjects(false);
+    setStatus(`Removed ${result.removed} missing projects`);
   });
 }
 
-function init(): void {
-  wireGlobalEvents();
-  wireDiskDialog();
-  wireRepoDialog();
-  wireSettingsDialog();
-  void refreshProjects();
+async function init(): Promise<void> {
+  try {
+    wireSidebarTabs();
+    wireGlobalEvents();
+    wireDiskDialog();
+    wireRepoDialog();
+    wireSettingsView();
+    activateTab("projects");
+    await refreshProjects(false);
+  } catch (error) {
+    setStatus(`UI init error: ${String(error)}`);
+  }
 }
 
-init();
+void init();

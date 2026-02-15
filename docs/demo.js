@@ -1,7 +1,39 @@
 ﻿(function () {
-  /** @typedef {{id:string,nickname:string,name:string,path:string,unityVersion:string,vcs:string,lastOpenedIso:string}} DemoProject */
+  const projectsTableBody = document.querySelector("#projects-table tbody");
+  const installsTableBody = document.querySelector("#installs-table tbody");
+  const statusEl = document.getElementById("status");
 
-  /** @type {DemoProject[]} */
+  const tabProjects = document.getElementById("tab-projects");
+  const tabInstalls = document.getElementById("tab-installs");
+  const tabSettings = document.getElementById("tab-settings");
+
+  const viewProjects = document.getElementById("view-projects");
+  const viewInstalls = document.getElementById("view-installs");
+  const viewSettings = document.getElementById("view-settings");
+
+  const searchInput = document.getElementById("search");
+  const addToggle = document.getElementById("add-toggle");
+  const addMenu = document.getElementById("add-menu");
+  const projectsMoreToggle = document.getElementById("projects-more-toggle");
+  const projectsMoreMenu = document.getElementById("projects-more-menu");
+
+  const diskDialog = document.getElementById("disk-dialog");
+  const repoDialog = document.getElementById("repo-dialog");
+
+  const diskPath = document.getElementById("disk-path");
+  const diskNickname = document.getElementById("disk-nickname");
+  const repoUrl = document.getElementById("repo-url");
+  const repoBranch = document.getElementById("repo-branch");
+  const repoTarget = document.getElementById("repo-target");
+  const repoNickname = document.getElementById("repo-nickname");
+
+  const settingsTheme = document.getElementById("settings-theme");
+  const settingsDefaultExe = document.getElementById("settings-default-unity-exe");
+
+  let selectedId = "";
+  let searchText = "";
+
+  /** @type {Array<{id:string,nickname:string,name:string,path:string,unityVersion:string,vcs:string,lastOpenedIso:string,missing:boolean}>} */
   let projects = [
     {
       id: "1",
@@ -11,6 +43,7 @@
       unityVersion: "6000.0.31f1",
       vcs: "Git main (clean)",
       lastOpenedIso: "2026-02-14T08:31:00Z",
+      missing: false,
     },
     {
       id: "2",
@@ -20,93 +53,113 @@
       unityVersion: "6000.0.31f1",
       vcs: "Git feature/ui-overhaul (dirty)",
       lastOpenedIso: "2026-02-13T21:11:00Z",
+      missing: false,
     },
     {
       id: "3",
-      nickname: "P4 Stream",
+      nickname: "Missing Project",
       name: "studio-game",
-      path: "D:/workspace/studio-game",
+      path: "D:/workspace/missing-project",
       unityVersion: "2022.3.63f1",
       vcs: "Perforce //Game/Main (clean)",
       lastOpenedIso: "2026-02-11T18:09:00Z",
+      missing: true,
     },
   ];
 
-  let selectedId = "";
-  let searchText = "";
+  /** @type {Array<{version:string,path:string,source:string,exists:boolean}>} */
+  const installs = [
+    { version: "6000.0.31f1", path: "C:/Program Files/Unity/Hub/Editor/6000.0.31f1/Editor/Unity.exe", source: "Hub-style path", exists: true },
+    { version: "2022.3.63f1", path: "D:/Unity/2022.3.63f1/Editor/Unity.exe", source: "Program Files", exists: true },
+    { version: "2021.3.45f1", path: "D:/Unity/missing/Editor/Unity.exe", source: "Metadata", exists: false },
+  ];
 
-  const tbody = document.querySelector("#projects-table tbody");
-  const statusEl = document.getElementById("status");
-  const searchInput = document.getElementById("search");
-  const addToggle = document.getElementById("add-toggle");
-  const addMenu = document.getElementById("add-menu");
+  function setStatus(message) {
+    if (statusEl) statusEl.textContent = message;
+  }
 
-  const diskDialog = document.getElementById("disk-dialog");
-  const repoDialog = document.getElementById("repo-dialog");
+  function warningLabel(missing) {
+    return missing ? '<span class="warning-pill">Missing</span>' : "";
+  }
 
-  const diskPath = document.getElementById("disk-path");
-  const diskNickname = document.getElementById("disk-nickname");
-  const diskUnityExe = document.getElementById("disk-unity-exe");
+  function displayName(project) {
+    const nickname = project.nickname.trim();
+    return nickname || project.name;
+  }
 
-  const repoUrl = document.getElementById("repo-url");
-  const repoBranch = document.getElementById("repo-branch");
-  const repoTarget = document.getElementById("repo-target");
-  const repoNickname = document.getElementById("repo-nickname");
+  function activateTab(tab) {
+    tabProjects.classList.toggle("active", tab === "projects");
+    tabInstalls.classList.toggle("active", tab === "installs");
+    tabSettings.classList.toggle("active", tab === "settings");
 
-  function setStatus(msg) {
-    if (statusEl) statusEl.textContent = msg;
+    viewProjects.classList.toggle("active", tab === "projects");
+    viewInstalls.classList.toggle("active", tab === "installs");
+    viewSettings.classList.toggle("active", tab === "settings");
+  }
+
+  function closeAddMenu() {
+    addMenu.classList.add("hidden");
+  }
+
+  function closeProjectsMenu() {
+    projectsMoreMenu.classList.add("hidden");
   }
 
   function filteredProjects() {
     const q = searchText.trim().toLowerCase();
     if (!q) return projects;
-    return projects.filter((p) => [p.nickname, p.name, p.path, p.unityVersion, p.vcs].some((x) => x.toLowerCase().includes(q)));
+    return projects.filter((p) => [displayName(p), p.path, p.unityVersion, p.vcs].some((value) => value.toLowerCase().includes(q)));
   }
 
-  function renderTable() {
-    if (!tbody) return;
-    tbody.innerHTML = "";
+  function renderProjects() {
+    projectsTableBody.innerHTML = "";
     for (const project of filteredProjects()) {
       const tr = document.createElement("tr");
+      tr.classList.add("clickable");
       if (project.id === selectedId) tr.classList.add("selected");
+      tr.innerHTML = `
+        <td>${displayName(project)}</td>
+        <td>${project.path}</td>
+        <td>${project.unityVersion}</td>
+        <td>${project.vcs}</td>
+        <td>${new Date(project.lastOpenedIso).toLocaleString()}</td>
+        <td>${warningLabel(project.missing)}</td>
+      `;
+
       tr.addEventListener("click", () => {
         selectedId = project.id;
-        renderTable();
+        renderProjects();
+        if (project.missing) {
+          setStatus("Demo: project path is missing");
+          return;
+        }
+        setStatus(`Demo: would launch/focus ${displayName(project)}`);
       });
 
-      const values = [
-        project.nickname,
-        project.name,
-        project.path,
-        project.unityVersion,
-        project.vcs,
-        new Date(project.lastOpenedIso).toLocaleString(),
-      ];
-
-      for (const value of values) {
-        const td = document.createElement("td");
-        td.textContent = value;
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
+      projectsTableBody.appendChild(tr);
     }
   }
 
-  function clearDiskForm() {
-    diskPath.value = "";
-    diskNickname.value = "";
-    diskUnityExe.value = "";
-  }
-
-  function clearRepoForm() {
-    repoUrl.value = "";
-    repoBranch.value = "";
-    repoTarget.value = "";
-    repoNickname.value = "";
-  }
-
-  function id() {
-    return Math.random().toString(36).slice(2, 10);
+  function renderInstalls() {
+    installsTableBody.innerHTML = "";
+    for (const install of installs) {
+      const tr = document.createElement("tr");
+      tr.classList.add("clickable");
+      tr.innerHTML = `
+        <td>${install.version}</td>
+        <td>${install.path}</td>
+        <td>${install.source}</td>
+        <td>${warningLabel(!install.exists)}</td>
+      `;
+      tr.addEventListener("click", () => {
+        if (!install.exists) {
+          setStatus("Demo: unity install path is missing");
+          return;
+        }
+        setStatus(`Demo: would launch editor ${install.version}`);
+      });
+      installsTableBody.appendChild(tr);
+    }
   }
 
   function inferName(pathValue) {
@@ -120,20 +173,24 @@
       setStatus("Project folder is required");
       return;
     }
+
     const name = inferName(projectPath);
     projects.unshift({
-      id: id(),
-      nickname: diskNickname.value.trim() || name,
+      id: Math.random().toString(36).slice(2, 10),
+      nickname: diskNickname.value.trim(),
       name,
       path: projectPath,
       unityVersion: "Detected in desktop app",
       vcs: "Detected in desktop app",
       lastOpenedIso: new Date().toISOString(),
+      missing: false,
     });
+
     diskDialog.close();
-    clearDiskForm();
-    renderTable();
-    setStatus("Demo: project added from disk (mock)");
+    diskPath.value = "";
+    diskNickname.value = "";
+    renderProjects();
+    setStatus("Demo: project added from disk");
   }
 
   function addFromRepo() {
@@ -143,85 +200,136 @@
       setStatus("Repository URL and target folder are required");
       return;
     }
+
     const name = inferName(target);
     const branch = repoBranch.value.trim() || "main";
     projects.unshift({
-      id: id(),
-      nickname: repoNickname.value.trim() || name,
+      id: Math.random().toString(36).slice(2, 10),
+      nickname: repoNickname.value.trim(),
       name,
       path: target,
       unityVersion: "Detected in desktop app",
       vcs: `Git ${branch} (mock)`,
       lastOpenedIso: new Date().toISOString(),
+      missing: false,
     });
+
     repoDialog.close();
-    clearRepoForm();
-    renderTable();
-    setStatus("Demo: repo cloned and added (mock)");
+    repoUrl.value = "";
+    repoBranch.value = "";
+    repoTarget.value = "";
+    repoNickname.value = "";
+    renderProjects();
+    setStatus("Demo: repo cloned and added");
   }
 
-  function removeSelected() {
-    if (!selectedId) {
-      setStatus("Select a project first");
-      return;
-    }
-    projects = projects.filter((p) => p.id !== selectedId);
-    selectedId = "";
-    renderTable();
-    setStatus("Demo: project removed");
-  }
+  addToggle.addEventListener("click", () => {
+    addMenu.classList.toggle("hidden");
+    closeProjectsMenu();
+  });
 
-  function launchSelected() {
-    if (!selectedId) {
-      setStatus("Select a project first");
-      return;
-    }
-    const project = projects.find((p) => p.id === selectedId);
-    if (!project) {
-      setStatus("Project not found");
-      return;
-    }
-    setStatus(`Demo: would launch/focus ${project.nickname}`);
-  }
+  projectsMoreToggle.addEventListener("click", () => {
+    projectsMoreMenu.classList.toggle("hidden");
+    closeAddMenu();
+  });
 
-  addToggle.addEventListener("click", () => addMenu.classList.toggle("hidden"));
   document.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    if (!target.closest(".add-wrap")) addMenu.classList.add("hidden");
+    if (!target.closest(".add-wrap")) closeAddMenu();
+    if (!target.closest(".projects-more-wrap")) closeProjectsMenu();
   });
 
   searchInput.addEventListener("input", () => {
     searchText = searchInput.value;
-    renderTable();
-  });
-
-  document.getElementById("add-disk").addEventListener("click", () => {
-    addMenu.classList.add("hidden");
-    diskDialog.showModal();
-  });
-  document.getElementById("add-repo").addEventListener("click", () => {
-    addMenu.classList.add("hidden");
-    repoDialog.showModal();
-  });
-  document.getElementById("disk-save").addEventListener("click", (event) => {
-    event.preventDefault();
-    addFromDisk();
-  });
-  document.getElementById("repo-save").addEventListener("click", (event) => {
-    event.preventDefault();
-    addFromRepo();
+    renderProjects();
   });
 
   document.getElementById("new-project").addEventListener("click", () => {
-    setStatus("Demo: New Project opens Unity Hub in desktop app");
-  });
-  document.getElementById("launch-btn").addEventListener("click", launchSelected);
-  document.getElementById("delete-btn").addEventListener("click", removeSelected);
-  document.getElementById("refresh-btn").addEventListener("click", () => {
-    renderTable();
-    setStatus("Demo refreshed");
+    closeAddMenu();
+    diskDialog.showModal();
+    setStatus("Demo: new project opens add-from-disk dialog");
   });
 
-  renderTable();
+  document.getElementById("add-disk").addEventListener("click", () => {
+    closeAddMenu();
+    diskDialog.showModal();
+  });
+
+  document.getElementById("add-repo").addEventListener("click", () => {
+    closeAddMenu();
+    repoDialog.showModal();
+  });
+
+  document.getElementById("disk-save").addEventListener("click", addFromDisk);
+  document.getElementById("repo-save").addEventListener("click", addFromRepo);
+
+  document.getElementById("refresh-btn").addEventListener("click", () => {
+    renderProjects();
+    setStatus("Demo projects refreshed");
+  });
+
+  document.getElementById("delete-btn").addEventListener("click", () => {
+    if (!selectedId) {
+      setStatus("Select a project first");
+      return;
+    }
+    projects = projects.filter((project) => project.id !== selectedId);
+    selectedId = "";
+    renderProjects();
+    setStatus("Demo: project removed");
+  });
+
+  document.getElementById("refresh-installs").addEventListener("click", () => {
+    renderInstalls();
+    setStatus("Demo installs refreshed");
+  });
+
+  document.getElementById("projects-menu-settings").addEventListener("click", () => {
+    closeProjectsMenu();
+    activateTab("settings");
+  });
+
+  document.getElementById("projects-menu-remove").addEventListener("click", () => {
+    closeProjectsMenu();
+    document.getElementById("delete-btn").click();
+  });
+
+  document.getElementById("settings-save").addEventListener("click", () => {
+    const selectedTheme = settingsTheme.value;
+    if (selectedTheme === "system") {
+      document.documentElement.removeAttribute("data-theme");
+    } else {
+      document.documentElement.setAttribute("data-theme", selectedTheme);
+    }
+    setStatus("Demo: settings saved");
+  });
+
+  document.getElementById("settings-remove-missing").addEventListener("click", () => {
+    const before = projects.length;
+    projects = projects.filter((project) => !project.missing);
+    const removed = before - projects.length;
+    if (selectedId && !projects.some((project) => project.id === selectedId)) {
+      selectedId = "";
+    }
+    renderProjects();
+    setStatus(`Demo: removed ${removed} missing projects`);
+  });
+
+  settingsDefaultExe.addEventListener("input", () => {
+    if (settingsDefaultExe.value) {
+      setStatus("Demo: default editor path updated");
+    }
+  });
+
+  tabProjects.addEventListener("click", () => activateTab("projects"));
+  tabInstalls.addEventListener("click", () => {
+    activateTab("installs");
+    renderInstalls();
+  });
+  tabSettings.addEventListener("click", () => activateTab("settings"));
+
+  activateTab("projects");
+  renderProjects();
+  renderInstalls();
 })();

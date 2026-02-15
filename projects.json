@@ -1,3 +1,6 @@
 ﻿{
-  "projects": []
+  "projects": [],
+  "meta": {
+    "firstRunBootstrapDone": false
+  }
 }
