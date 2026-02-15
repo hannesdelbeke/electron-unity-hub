@@ -1,6 +1,6 @@
 {
   "name": "unity-launcher",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Lightweight Unity project launcher",
   "main": "dist/app.js",
   "scripts": {
