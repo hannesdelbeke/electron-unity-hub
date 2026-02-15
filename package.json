@@ -9,7 +9,9 @@
     "start": "npm run build && electron .",
     "dev": "npm run start",
     "test:e2e": "npm run build && playwright test",
-    "package:win": "npm run build && electron-builder --win portable --publish never"
+    "package:win": "npm run build && electron-builder --win portable --publish never",
+    "package:mac": "npm run build && electron-builder --mac zip --publish never",
+    "package:linux": "npm run build && electron-builder --linux AppImage --publish never"
   },
   "author": "",
   "license": "MIT",
