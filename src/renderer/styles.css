@@ -414,6 +414,22 @@ td.actions-cell {
   overflow: visible;
 }
 
+#projects-table th:last-child,
+#projects-table td.actions-cell,
+#installs-table th:last-child,
+#installs-table td.actions-cell {
+  width: 64px;
+  min-width: 64px;
+  max-width: 64px;
+}
+
+#projects-table th[data-sort="status"],
+#projects-table td:nth-child(7) {
+  width: 92px;
+  min-width: 92px;
+  max-width: 92px;
+}
+
 #projects-table th:first-child,
 #projects-table td:first-child,
 #installs-table th:first-child,
@@ -460,6 +476,47 @@ tr.selected {
   line-height: inherit;
 }
 
+.vcs-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.vcs-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--btn-hover);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.vcs-branch {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.vcs-metric {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.vcs-warn {
+  color: var(--warning-text);
+  font-size: 14px;
+  line-height: 1;
+}
+
 .project-icon {
   width: 16px;
   height: 16px;
@@ -483,9 +540,41 @@ tr.selected {
 
 #status {
   margin-left: auto;
-  color: var(--status-success);
   font-size: 12px;
   font-weight: 600;
+}
+
+#status.status-success {
+  color: var(--status-success);
+}
+
+#status.status-warning {
+  color: #d3a327;
+}
+
+#status.status-error {
+  color: var(--warning-text);
+}
+
+#status.status-info {
+  color: var(--muted);
+}
+
+#status.status-loading::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 999px;
+  vertical-align: -1px;
+  animation: status-spin 0.8s linear infinite;
+}
+
+@keyframes status-spin {
+  to { transform: rotate(360deg); }
 }
 
 .muted {
@@ -619,6 +708,17 @@ tr.selected {
   border: 1px solid var(--warning-border);
   background: var(--warning-bg);
   color: var(--warning-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.open-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--status-success) 45%, var(--line));
+  background: color-mix(in srgb, var(--status-success) 18%, transparent);
+  color: var(--status-success);
   font-size: 11px;
   font-weight: 600;
 }

@@ -12,6 +12,11 @@ type VcsStatus = {
   kind: string;
   branchOrStream: string;
   state: string;
+  localChangesCount: number;
+  incomingCount: number;
+  outgoingCount: number;
+  conflictCount: number;
+  infoMessage?: string;
 };
 
 type UnityInstall = {
@@ -22,14 +27,16 @@ type UnityInstall = {
 };
 
 type ThemePreference = "system" | "dark" | "light";
+type StatusTone = "success" | "warning" | "error" | "info";
 type SortDirection = "asc" | "desc";
-type ProjectSortKey = "displayName" | "path" | "unityVersion" | "vcs" | "lastOpenedIso" | "status";
+type ProjectSortKey = "displayName" | "path" | "unityVersion" | "vcs" | "branchOrStream" | "lastOpenedIso" | "status";
 type InstallSortKey = "version" | "path" | "source" | "status";
 
 type ProjectTableRow = {
   project: ProjectEntry;
   vcs: VcsStatus;
   isMissing: boolean;
+  isOpen: boolean;
   iconDataUrl: string;
 };
 
@@ -81,6 +88,7 @@ let openInstallMenuPath = "";
 let editingProjectId = "";
 let didInit = false;
 let projectsRenderToken = 0;
+let statusActivityToken = 0;
 let projectSort: { key: ProjectSortKey; direction: SortDirection } = { key: "lastOpenedIso", direction: "desc" };
 let installSort: { key: InstallSortKey; direction: SortDirection } = { key: "version", direction: "asc" };
 
@@ -91,9 +99,37 @@ const customInstallsKey = "unityLauncher.customInstalls";
 
 type TabName = "projects" | "installs" | "settings";
 
-function setStatus(msg: string): void {
+function setStatus(msg: string, tone: StatusTone = "success"): void {
   if (statusEl) {
     statusEl.textContent = msg;
+    statusEl.classList.remove("status-success", "status-warning", "status-error", "status-info", "status-loading");
+    statusEl.classList.add(`status-${tone}`);
+  }
+}
+
+async function withActivity<T>(message: string, task: () => Promise<T>): Promise<T> {
+  const token = ++statusActivityToken;
+  const previousText = statusEl?.textContent ?? "";
+  const previousClassName = statusEl?.className ?? "";
+  let shown = false;
+
+  const timer = setTimeout(() => {
+    if (token !== statusActivityToken) {
+      return;
+    }
+    shown = true;
+    setStatus(message, "info");
+    statusEl?.classList.add("status-loading");
+  }, 300);
+
+  try {
+    return await task();
+  } finally {
+    clearTimeout(timer);
+    if (statusEl && token === statusActivityToken && shown && statusEl.textContent === message && statusEl.classList.contains("status-loading")) {
+      statusEl.textContent = previousText;
+      statusEl.className = previousClassName;
+    }
   }
 }
 
@@ -116,19 +152,66 @@ function activateTab(tab: TabName): void {
   viewSettings?.classList.toggle("active", tab === "settings");
 }
 
-function formatVcs(vcs: VcsStatus): string {
+function formatVcsText(vcs: VcsStatus): string {
   if (vcs.kind === "None") {
     return "None";
   }
-  const branch = vcs.branchOrStream ? ` ${vcs.branchOrStream}` : "";
-  return `${vcs.kind}${branch} (${vcs.state})`;
+  const warn = vcs.conflictCount > 0 ? " clash" : "";
+  return `${vcs.kind} (${vcs.state}) ↓${vcs.incomingCount} ↑${vcs.outgoingCount} (${vcs.localChangesCount})${warn}`;
+}
+
+function formatVcsHtml(vcs: VcsStatus): string {
+  if (vcs.kind === "None") {
+    return "";
+  }
+  const safeInfo = (vcs.infoMessage ?? "").replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
+  const icon = vcs.kind === "Git"
+    ? "Git"
+    : vcs.kind === "Perforce"
+      ? "Perforce"
+      : vcs.kind === "SVN"
+        ? "SVN"
+        : vcs.kind === "Plastic"
+          ? "Plastic"
+          : vcs.kind === "Unity Version Control"
+            ? "UnityVC"
+            : "VC";
+  const infoWarn = safeInfo
+    ? `<span class="vcs-warn vcs-info-warn" title="${safeInfo}">⚠</span>`
+    : "";
+  const conflictWarn = vcs.conflictCount > 0
+    ? `<span class="vcs-warn" title="Conflict/clash detected">⚠</span>`
+    : "";
+  const incoming = `<span class="vcs-metric" title="Changes to pull">↓${vcs.incomingCount}</span>`;
+  const outgoing = vcs.kind === "Git"
+    ? `<span class="vcs-metric" title="Changes to push">↑${vcs.outgoingCount}</span>`
+    : "";
+  const changed = `<span class="vcs-metric" title="Changed files">(${vcs.localChangesCount})</span>`;
+  return `<div class="vcs-cell"><span class="vcs-kind">${icon}</span>${conflictWarn}${infoWarn}${incoming}${outgoing}${changed}</div>`;
 }
 
 function formatLastOpened(iso: string): string {
   if (!iso) {
     return "never";
   }
-  return new Date(iso).toLocaleString();
+  return new Date(iso).toLocaleString(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function statusLabel(missing: boolean, isOpen: boolean): string {
+  if (missing) {
+    return "<span class=\"warning-pill\">Missing</span>";
+  }
+  if (isOpen) {
+    return "<span class=\"open-pill\">Open</span>";
+  }
+  return "";
 }
 
 function warningLabel(missing: boolean): string {
@@ -328,7 +411,11 @@ function dedupeProjects(input: ProjectEntry[]): ProjectEntry[] {
 
 async function launchProjectRow(project: ProjectEntry): Promise<void> {
   const result = await window.launcherApi.launchOrFocus(project);
-  setStatus(result.message);
+  if (/focus failed/i.test(result.message)) {
+    setStatus(result.message, "warning");
+  } else {
+    setStatus(result.message, result.ok ? "success" : "error");
+  }
   await refreshProjects(false);
 }
 
@@ -360,19 +447,23 @@ async function renderProjectsTable(): Promise<void> {
 
   const token = ++projectsRenderToken;
   const visible = getFilteredProjects();
-  const rows: ProjectTableRow[] = await Promise.all(
-    visible.map(async (project) => {
-      const [vcs, iconDataUrl] = await Promise.all([
-        window.launcherApi.getVcsStatus(project.path),
-        window.launcherApi.getProjectIcon(project.path),
-      ]);
-      return {
-        project,
-        vcs,
-        isMissing: vcs.state === "missing path",
-        iconDataUrl,
-      };
-    }),
+  const rows: ProjectTableRow[] = await withActivity("Updating project info...", async () =>
+    Promise.all(
+      visible.map(async (project) => {
+        const [vcs, iconDataUrl, isOpen] = await Promise.all([
+          window.launcherApi.getVcsStatus(project.path),
+          window.launcherApi.getProjectIcon(project.path),
+          window.launcherApi.isProjectOpen(project.path),
+        ]);
+        return {
+          project,
+          vcs,
+          isMissing: vcs.state === "missing path",
+          isOpen,
+          iconDataUrl,
+        };
+      }),
+    ),
   );
 
   if (token !== projectsRenderToken) {
@@ -397,16 +488,20 @@ async function renderProjectsTable(): Promise<void> {
         right = b.project.unityVersion;
         break;
       case "vcs":
-        left = formatVcs(a.vcs);
-        right = formatVcs(b.vcs);
+        left = formatVcsText(a.vcs);
+        right = formatVcsText(b.vcs);
+        break;
+      case "branchOrStream":
+        left = a.vcs.branchOrStream || "";
+        right = b.vcs.branchOrStream || "";
         break;
       case "lastOpenedIso":
         left = parseTimestamp(a.project.lastOpenedIso);
         right = parseTimestamp(b.project.lastOpenedIso);
         break;
       case "status":
-        left = a.isMissing;
-        right = b.isMissing;
+        left = a.isMissing ? 2 : a.isOpen ? 1 : 0;
+        right = b.isMissing ? 2 : b.isOpen ? 1 : 0;
         break;
       default:
         left = 0;
@@ -431,13 +526,13 @@ async function renderProjectsTable(): Promise<void> {
 
     const vcs = row.vcs;
     const isMissing = row.isMissing;
+    const isOpen = row.isOpen;
 
     const values: Array<string> = [
       project.path,
       project.unityVersion,
-      formatVcs(vcs),
       formatLastOpened(project.lastOpenedIso),
-      warningLabel(isMissing),
+      statusLabel(isMissing, isOpen),
     ];
 
     const projectCell = document.createElement("td");
@@ -455,11 +550,29 @@ async function renderProjectsTable(): Promise<void> {
     projectCell.appendChild(projectContent);
     tr.appendChild(projectCell);
 
-    for (let i = 0; i < values.length; i += 1) {
-      const td = document.createElement("td");
-      td.appendChild(createCellContent(values[i], i === values.length - 1));
-      tr.appendChild(td);
-    }
+    const pathTd = document.createElement("td");
+    pathTd.appendChild(createCellContent(values[0]));
+    tr.appendChild(pathTd);
+
+    const versionTd = document.createElement("td");
+    versionTd.appendChild(createCellContent(values[1]));
+    tr.appendChild(versionTd);
+
+    const vcsTd = document.createElement("td");
+    vcsTd.appendChild(createCellContent(formatVcsHtml(vcs), true));
+    tr.appendChild(vcsTd);
+
+    const lastOpenedTd = document.createElement("td");
+    lastOpenedTd.appendChild(createCellContent(vcs.kind === "None" ? "" : (vcs.branchOrStream || "—")));
+    tr.appendChild(lastOpenedTd);
+
+    const modifiedTd = document.createElement("td");
+    modifiedTd.appendChild(createCellContent(values[2]));
+    tr.appendChild(modifiedTd);
+
+    const statusTd = document.createElement("td");
+    statusTd.appendChild(createCellContent(values[3], true));
+    tr.appendChild(statusTd);
 
     const actionsTd = document.createElement("td");
     actionsTd.className = "actions-cell";
@@ -695,24 +808,26 @@ async function refreshProjects(updateStatus = true): Promise<void> {
 }
 
 async function refreshInstalls(updateStatus = true): Promise<void> {
-  const dismissed = loadDismissedInstallPaths();
-  const detectedInstalls = await window.launcherApi.getUnityInstalls();
-  const customInstalls: UnityInstall[] = loadCustomInstallPaths().map((installPath) => ({
-    version: inferInstallVersionFromPath(installPath),
-    path: installPath,
-    source: "Manual",
-    exists: true,
-  }));
+  installs = await withActivity("Scanning Unity installs...", async () => {
+    const dismissed = loadDismissedInstallPaths();
+    const detectedInstalls = await window.launcherApi.getUnityInstalls();
+    const customInstalls: UnityInstall[] = loadCustomInstallPaths().map((installPath) => ({
+      version: inferInstallVersionFromPath(installPath),
+      path: installPath,
+      source: "Manual",
+      exists: true,
+    }));
 
-  const merged = [...detectedInstalls, ...customInstalls];
-  const deduped = new Map<string, UnityInstall>();
-  for (const install of merged) {
-    const key = install.path.toLowerCase();
-    if (!deduped.has(key)) {
-      deduped.set(key, install);
+    const merged = [...detectedInstalls, ...customInstalls];
+    const deduped = new Map<string, UnityInstall>();
+    for (const install of merged) {
+      const key = install.path.toLowerCase();
+      if (!deduped.has(key)) {
+        deduped.set(key, install);
+      }
     }
-  }
-  installs = [...deduped.values()].filter((install) => !dismissed.has(install.path.toLowerCase()));
+    return [...deduped.values()].filter((install) => !dismissed.has(install.path.toLowerCase()));
+  });
   renderInstallsTable();
   if (updateStatus) {
     setStatus("Unity installs refreshed");
@@ -764,8 +879,7 @@ async function addFromRepo(): Promise<void> {
     return;
   }
 
-  setStatus("Cloning repository...");
-  const clone = await window.launcherApi.cloneRepo(url, target, branch);
+  const clone = await withActivity("Cloning repository...", () => window.launcherApi.cloneRepo(url, target, branch));
   if (!clone.ok) {
     setStatus(clone.message);
     return;

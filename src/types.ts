@@ -12,6 +12,11 @@ export type VcsStatus = {
   kind: string;
   branchOrStream: string;
   state: string;
+  localChangesCount: number;
+  incomingCount: number;
+  outgoingCount: number;
+  conflictCount: number;
+  infoMessage?: string;
 };
 
 export type UnityInstall = {
@@ -33,6 +38,7 @@ declare global {
       detectUnityVersion: (projectPath: string) => Promise<string>;
       getProjectIcon: (projectPath: string) => Promise<string>;
       getVcsStatus: (projectPath: string) => Promise<VcsStatus>;
+      isProjectOpen: (projectPath: string) => Promise<boolean>;
       getUnityInstalls: () => Promise<UnityInstall[]>;
       launchOrFocus: (project: ProjectEntry) => Promise<{
         ok: boolean;

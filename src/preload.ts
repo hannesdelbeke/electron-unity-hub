@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("launcherApi", {
   detectUnityVersion: (projectPath: string) => ipcRenderer.invoke("unity:detectVersion", projectPath),
   getProjectIcon: (projectPath: string) => ipcRenderer.invoke("unity:projectIcon", projectPath),
   getVcsStatus: (projectPath: string) => ipcRenderer.invoke("vcs:status", projectPath),
+  isProjectOpen: (projectPath: string) => ipcRenderer.invoke("project:isOpen", projectPath),
   getUnityInstalls: () => ipcRenderer.invoke("unity:installs"),
   launchOrFocus: (project: ProjectEntry) => ipcRenderer.invoke("unity:launchOrFocus", project),
   launchUnityEditor: (editorPath: string) => ipcRenderer.invoke("unity:launchEditor", editorPath),

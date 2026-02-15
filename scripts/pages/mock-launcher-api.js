@@ -130,9 +130,41 @@
     },
     async getVcsStatus(projectPath) {
       const value = (projectPath || "").toLowerCase();
-      if (value.includes("missing")) return { kind: "None", branchOrStream: "", state: "missing path" };
-      if (value.includes("space")) return { kind: "Git", branchOrStream: "main", state: "clean" };
-      return { kind: "Perforce", branchOrStream: "//Game/Main", state: "clean" };
+      if (value.includes("missing")) {
+        return {
+          kind: "None",
+          branchOrStream: "",
+          state: "missing path",
+          localChangesCount: 0,
+          incomingCount: 0,
+          outgoingCount: 0,
+          conflictCount: 0,
+        };
+      }
+      if (value.includes("space")) {
+        return {
+          kind: "Git",
+          branchOrStream: "main",
+          state: "clean",
+          localChangesCount: 2,
+          incomingCount: 1,
+          outgoingCount: 3,
+          conflictCount: 0,
+        };
+      }
+      return {
+        kind: "Perforce",
+        branchOrStream: "//Game/Main",
+        state: "dirty",
+        localChangesCount: 4,
+        incomingCount: 1,
+        outgoingCount: 0,
+        conflictCount: 0,
+      };
+    },
+    async isProjectOpen(projectPath) {
+      const value = (projectPath || "").toLowerCase();
+      return value.includes("space");
     },
     async getProjectIcon() {
       return "./assets/unityhub.png";

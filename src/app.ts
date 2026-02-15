@@ -413,17 +413,85 @@ function run(cmd: string, args: string[], cwd: string): string {
   return "";
 }
 
+function runWithResult(cmd: string, args: string[], cwd: string): { status: number | null; stdout: string; stderr: string } {
+  const p = spawnSync(cmd, args, { cwd, encoding: "utf-8", timeout: 2000 });
+  return {
+    status: p.status,
+    stdout: (p.stdout ?? "").trim(),
+    stderr: (p.stderr ?? "").trim(),
+  };
+}
+
+function emptyVcsStatus(kind = "None", branchOrStream = "", state = "not detected"): VcsStatus {
+  return {
+    kind,
+    branchOrStream,
+    state,
+    localChangesCount: 0,
+    incomingCount: 0,
+    outgoingCount: 0,
+    conflictCount: 0,
+    infoMessage: "",
+  };
+}
+
 function isGitRepo(projectPath: string): boolean {
+  if (existsSync(path.join(projectPath, ".git"))) {
+    return true;
+  }
   return run("git", ["rev-parse", "--is-inside-work-tree"], projectPath) === "true";
 }
 
 function gitStatus(projectPath: string): VcsStatus {
+  const statusResult = runWithResult("git", ["status", "--porcelain=v1", "--branch"], projectPath);
+  if (statusResult.status !== 0) {
+    const err = statusResult.stderr.toLowerCase();
+    const blocked = err.includes("dubious ownership");
+    return {
+      kind: "Git",
+      branchOrStream: blocked ? "safe.directory required" : "unavailable",
+      state: blocked ? "unsafe ownership" : "error",
+      localChangesCount: 0,
+      incomingCount: 0,
+      outgoingCount: 0,
+      conflictCount: 0,
+      infoMessage: blocked
+        ? `Git blocked by safe.directory. Run: git config --global --add safe.directory ${projectPath.replace(/\\/g, "/")}`
+        : statusResult.stderr || "Git status unavailable",
+    };
+  }
+
+  const statusWithBranch = statusResult.stdout;
+  const statusLines = statusWithBranch.split(/\r?\n/).filter((line) => line.trim().length > 0 && !line.startsWith("##"));
+  const localChangesCount = statusLines.length;
+  const conflictCount = statusLines.reduce((acc, line) => {
+    const xy = line.slice(0, 2);
+    const conflicted = xy.includes("U") || xy === "AA" || xy === "DD";
+    return acc + (conflicted ? 1 : 0);
+  }, 0);
+
+  let incomingCount = 0;
+  let outgoingCount = 0;
+  const aheadBehind = run("git", ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"], projectPath);
+  if (aheadBehind) {
+    const parts = aheadBehind.split(/\s+/).map((value) => Number.parseInt(value, 10));
+    if (parts.length >= 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
+      incomingCount = parts[0];
+      outgoingCount = parts[1];
+    }
+  }
+
   const branch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], projectPath) || "unknown";
-  const porcelain = run("git", ["status", "--porcelain"], projectPath);
+  const state = conflictCount > 0 ? "conflict" : localChangesCount > 0 ? "dirty" : "clean";
   return {
     kind: "Git",
     branchOrStream: branch,
-    state: porcelain ? "dirty" : "clean",
+    state,
+    localChangesCount,
+    incomingCount,
+    outgoingCount,
+    conflictCount,
+    infoMessage: "",
   };
 }
 
@@ -436,17 +504,128 @@ function perforceStatus(projectPath: string): VcsStatus {
   const streamLine = run("p4", ["-d", projectPath, "client", "-o"], projectPath)
     .split(/\r?\n/)
     .find((line) => line.startsWith("Stream:"));
-  const opened = run("p4", ["-d", projectPath, "opened", "-m", "1"], projectPath);
+  const opened = run("p4", ["-d", projectPath, "opened"], projectPath);
+  const localChangesCount = opened
+    ? opened.split(/\r?\n/).filter((line) => line.trim().length > 0).length
+    : 0;
+
+  const syncPreview = run("p4", ["-d", projectPath, "sync", "-n"], projectPath);
+  const incomingCount = syncPreview && !syncPreview.toLowerCase().includes("up-to-date")
+    ? syncPreview.split(/\r?\n/).filter((line) => line.trim().length > 0).length
+    : 0;
+
+  const resolvePreview = run("p4", ["-d", projectPath, "resolve", "-n"], projectPath);
+  const conflictCount = resolvePreview
+    ? resolvePreview.split(/\r?\n/).filter((line) => line.trim().length > 0).length
+    : 0;
+  const state = conflictCount > 0 ? "conflict" : localChangesCount > 0 ? "dirty" : "clean";
+
   return {
     kind: "Perforce",
     branchOrStream: streamLine ? streamLine.replace("Stream:", "").trim() : "workspace",
-    state: opened ? "dirty" : "clean",
+    state,
+    localChangesCount,
+    incomingCount,
+    outgoingCount: 0,
+    conflictCount,
+    infoMessage: "",
+  };
+}
+
+function isSvnRepo(projectPath: string): boolean {
+  if (existsSync(path.join(projectPath, ".svn"))) {
+    return true;
+  }
+  return run("svn", ["info"], projectPath).length > 0;
+}
+
+function svnStatus(projectPath: string): VcsStatus {
+  const url = run("svn", ["info", "--show-item", "url"], projectPath);
+  const localStatus = run("svn", ["status"], projectPath);
+  const localLines = localStatus
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0);
+  const localChangesCount = localLines.length;
+  const conflictCount = localLines.filter((line) => line.startsWith("C")).length;
+
+  const remoteStatus = run("svn", ["status", "-u"], projectPath);
+  const incomingCount = remoteStatus
+    .split(/\r?\n/)
+    .filter((line) => line.length > 8 && line[8] === "*")
+    .length;
+
+  const state = conflictCount > 0 ? "conflict" : localChangesCount > 0 ? "dirty" : "clean";
+  return {
+    kind: "SVN",
+    branchOrStream: url || "working copy",
+    state,
+    localChangesCount,
+    incomingCount,
+    outgoingCount: 0,
+    conflictCount,
+    infoMessage: "",
+  };
+}
+
+function plasticWorkspaceKind(projectPath: string): "Plastic" | "Unity Version Control" {
+  if (existsSync(path.join(projectPath, ".unityvcs"))) {
+    return "Unity Version Control";
+  }
+  return "Plastic";
+}
+
+function isPlasticRepo(projectPath: string): boolean {
+  if (existsSync(path.join(projectPath, ".plastic")) || existsSync(path.join(projectPath, ".unityvcs"))) {
+    return true;
+  }
+  if (!commandExists("cm")) {
+    return false;
+  }
+  return run("cm", ["status", "--noheaders"], projectPath).length > 0;
+}
+
+function plasticStatus(projectPath: string): VcsStatus {
+  const kind = plasticWorkspaceKind(projectPath);
+  const statusOutput = run("cm", ["status", "--noheaders"], projectPath);
+  const statusLines = statusOutput
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0);
+  const localChangesCount = statusLines.length;
+
+  const conflictOutput = run("cm", ["resolve", "--pending"], projectPath);
+  const conflictCount = conflictOutput
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0 && !line.toLowerCase().includes("no pending"))
+    .length;
+
+  // Lightweight incoming preview; fallback to 0 if unavailable.
+  const incomingOutput = run("cm", ["incoming", "--format={changesetid}"], projectPath);
+  const incomingCount = incomingOutput
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .length;
+
+  const branch =
+    run("cm", ["status", "--header"], projectPath)
+      .split(/\r?\n/)
+      .find((line) => /branch|selector|workspace/i.test(line))
+      ?.trim() ?? "workspace";
+  const state = conflictCount > 0 ? "conflict" : localChangesCount > 0 ? "dirty" : "clean";
+  return {
+    kind,
+    branchOrStream: branch,
+    state,
+    localChangesCount,
+    incomingCount,
+    outgoingCount: 0,
+    conflictCount,
+    infoMessage: "",
   };
 }
 
 function getVcsStatus(projectPath: string): VcsStatus {
   if (!existsSync(projectPath)) {
-    return { kind: "None", branchOrStream: "", state: "missing path" };
+    return emptyVcsStatus("None", "", "missing path");
   }
   if (isGitRepo(projectPath)) {
     return gitStatus(projectPath);
@@ -454,26 +633,208 @@ function getVcsStatus(projectPath: string): VcsStatus {
   if (isPerforce(projectPath)) {
     return perforceStatus(projectPath);
   }
-  return { kind: "None", branchOrStream: "", state: "not detected" };
+  if (isSvnRepo(projectPath)) {
+    return svnStatus(projectPath);
+  }
+  if (isPlasticRepo(projectPath)) {
+    return plasticStatus(projectPath);
+  }
+  return emptyVcsStatus("None", "", "not detected");
 }
 
 function projectIsOpen(projectPath: string): boolean {
   return existsSync(path.join(projectPath, "Temp", "UnityLockfile"));
 }
 
-function focusUnityWindow(projectName: string): boolean {
-  if (process.platform !== "win32") {
-    return false;
+type FocusResult = {
+  ok: boolean;
+  reason?: string;
+};
+
+function commandExists(cmd: string): boolean {
+  const checker = process.platform === "win32" ? "where" : "which";
+  const p = spawnSync(checker, [cmd], { encoding: "utf-8", timeout: 2000 });
+  return p.status === 0;
+}
+
+function projectTitleCandidates(project: ProjectEntry): string[] {
+  const basename = path.basename(project.path);
+  return [project.nickname, project.name, basename]
+    .map((value) => value.trim())
+    .filter((value, index, arr) => value.length > 0 && arr.indexOf(value) === index);
+}
+
+function focusUnityWindowWindows(project: ProjectEntry): FocusResult {
+  const candidates = projectTitleCandidates(project);
+  if (candidates.length === 0) {
+    return { ok: false, reason: "no project title candidates" };
   }
 
+  const escaped = candidates.map((value) => `'${value.replace(/'/g, "''")}'`).join(", ");
+
   const script = `
-$wshell = New-Object -ComObject WScript.Shell
-if ($wshell.AppActivate('${projectName.replace(/'/g, "''")}')) { exit 0 }
-if ($wshell.AppActivate('Unity')) { exit 0 }
-exit 1
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class Win32 {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+  [DllImport("user32.dll", SetLastError=true)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
+"@
+
+$targets = @(${escaped})
+$script:matched = $false
+
+[Win32]::EnumWindows({
+  param($hWnd, $lParam)
+  if (-not [Win32]::IsWindowVisible($hWnd)) { return $true }
+  $titleBuilder = New-Object System.Text.StringBuilder 512
+  [void][Win32]::GetWindowText($hWnd, $titleBuilder, $titleBuilder.Capacity)
+  $title = $titleBuilder.ToString()
+  if ([string]::IsNullOrWhiteSpace($title)) { return $true }
+
+  $windowPid = 0
+  [void][Win32]::GetWindowThreadProcessId($hWnd, [ref]$windowPid)
+  if ($windowPid -le 0) { return $true }
+
+  try {
+    $proc = [System.Diagnostics.Process]::GetProcessById([int]$windowPid)
+  } catch {
+    return $true
+  }
+
+  if ($proc.ProcessName -ne 'Unity') { return $true }
+
+  foreach ($target in $targets) {
+    if ($title -like ('*' + $target + '*')) {
+      [void][Win32]::ShowWindow($hWnd, 9)
+      [void][Win32]::SetForegroundWindow($hWnd)
+      $script:matched = $true
+      return $false
+    }
+  }
+
+  return $true
+}, [IntPtr]::Zero) | Out-Null
+
+if ($script:matched) { exit 0 } else { exit 1 }
 `;
   const p = spawnSync("powershell", ["-NoProfile", "-Command", script], { encoding: "utf-8", timeout: 3000 });
-  return p.status === 0;
+  return p.status === 0
+    ? { ok: true }
+    : { ok: false, reason: "no matching Unity window title found" };
+}
+
+function focusUnityWindowMac(project: ProjectEntry): FocusResult {
+  if (!commandExists("osascript")) {
+    return { ok: false, reason: "missing dependency: osascript" };
+  }
+
+  const candidates = projectTitleCandidates(project);
+  if (candidates.length === 0) {
+    return { ok: false, reason: "no project title candidates" };
+  }
+
+  const escaped = candidates.map((value) => `"${value.replace(/"/g, '\\"')}"`).join(", ");
+  const script = `
+set targets to {${escaped}}
+tell application "System Events"
+  if not (exists process "Unity") then return "missing"
+  tell process "Unity"
+    set frontmost to true
+    repeat with w in windows
+      set windowName to (name of w) as text
+      repeat with t in targets
+        if windowName contains t then
+          try
+            perform action "AXRaise" of w
+          end try
+          set frontmost to true
+          return "ok"
+        end if
+      end repeat
+    end repeat
+  end tell
+end tell
+return "nomatch"
+`;
+  const p = spawnSync("osascript", ["-e", script], { encoding: "utf-8", timeout: 4000 });
+  const out = (p.stdout ?? "").trim().toLowerCase();
+  if (p.status === 0 && out.includes("ok")) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    reason: "focus failed on macOS. Ensure Accessibility permission is granted to the app/terminal in System Settings > Privacy & Security > Accessibility.",
+  };
+}
+
+function focusUnityWindowLinux(project: ProjectEntry): FocusResult {
+  const candidates = projectTitleCandidates(project);
+  if (candidates.length === 0) {
+    return { ok: false, reason: "no project title candidates" };
+  }
+
+  const hasWmctrl = commandExists("wmctrl");
+  const hasXdotool = commandExists("xdotool");
+  if (!hasWmctrl && !hasXdotool) {
+    return {
+      ok: false,
+      reason: "missing dependency: install wmctrl or xdotool (Ubuntu/Debian: sudo apt install wmctrl xdotool, Fedora: sudo dnf install wmctrl xdotool, Arch: sudo pacman -S wmctrl xdotool).",
+    };
+  }
+
+  if (hasWmctrl) {
+    const list = run("wmctrl", ["-l"], project.path);
+    const lines = list.split(/\r?\n/).filter((line) => line.trim().length > 0);
+    for (const line of lines) {
+      const id = line.split(/\s+/)[0];
+      const lower = line.toLowerCase();
+      if (!lower.includes("unity")) {
+        continue;
+      }
+      if (!candidates.some((target) => lower.includes(target.toLowerCase()))) {
+        continue;
+      }
+      const activate = spawnSync("wmctrl", ["-ia", id], { encoding: "utf-8", timeout: 3000 });
+      if (activate.status === 0) {
+        return { ok: true };
+      }
+    }
+  }
+
+  if (hasXdotool) {
+    for (const target of candidates) {
+      const activate = spawnSync("xdotool", ["search", "--name", target, "windowactivate"], {
+        encoding: "utf-8",
+        timeout: 3000,
+      });
+      if (activate.status === 0) {
+        return { ok: true };
+      }
+    }
+  }
+
+  return { ok: false, reason: "no matching Unity window title found" };
+}
+
+function focusUnityWindow(project: ProjectEntry): FocusResult {
+  if (process.platform === "win32") {
+    return focusUnityWindowWindows(project);
+  }
+  if (process.platform === "darwin") {
+    return focusUnityWindowMac(project);
+  }
+  if (process.platform === "linux") {
+    return focusUnityWindowLinux(project);
+  }
+  return { ok: false, reason: "platform not supported for window focusing" };
 }
 
 function launchProject(project: ProjectEntry): {
@@ -499,18 +860,42 @@ function launchProject(project: ProjectEntry): {
     resolvedExe = exact?.path ?? compatible?.path ?? installs[0]?.path ?? "";
   }
 
-  let prefix = "";
   if (projectIsOpen(project.path)) {
-    const focused = focusUnityWindow(project.name || project.nickname);
-    if (focused) {
+    const focus = focusUnityWindow(project);
+    if (focus.ok) {
       return {
         ok: true,
         message: "Project already open. Focused existing Unity window.",
-        focused,
+        focused: true,
         resolvedUnityExe: resolvedExe,
       };
     }
-    prefix = "Project appears open, but focus failed. Attempting launch. ";
+    // Lockfile can be stale; proceed with launch if focus fails.
+    const reason = focus.reason ? ` ${focus.reason}` : "";
+    try {
+      if (!resolvedExe || !existsSync(resolvedExe)) {
+        return {
+          ok: false,
+          message: `Project appears open, but focus failed.${reason} Unity executable is not set or does not exist.`.trim(),
+          focused: false,
+          resolvedUnityExe: resolvedExe,
+        };
+      }
+      spawn(resolvedExe, ["-projectPath", project.path], { detached: true, stdio: "ignore" }).unref();
+      return {
+        ok: true,
+        message: `Project appears open, but focus failed.${reason} Attempting launch.`.trim(),
+        focused: false,
+        resolvedUnityExe: resolvedExe,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        message: `Project appears open, but focus failed.${reason} Failed to launch: ${String(error)}`.trim(),
+        focused: false,
+        resolvedUnityExe: resolvedExe,
+      };
+    }
   }
 
   if (!resolvedExe || !existsSync(resolvedExe)) {
@@ -521,7 +906,7 @@ function launchProject(project: ProjectEntry): {
     spawn(resolvedExe, ["-projectPath", project.path], { detached: true, stdio: "ignore" }).unref();
     return {
       ok: true,
-      message: `${prefix}Launched Unity project.`,
+      message: "Launched Unity project.",
       resolvedUnityExe: resolvedExe,
     };
   } catch (error) {
@@ -698,6 +1083,7 @@ app.whenReady().then(() => {
   ipcMain.handle("unity:detectVersion", (_event, projectPath: string) => detectUnityVersion(projectPath));
   ipcMain.handle("unity:projectIcon", (_event, projectPath: string) => detectProjectIconDataUrl(projectPath));
   ipcMain.handle("vcs:status", (_event, projectPath: string) => getVcsStatus(projectPath));
+  ipcMain.handle("project:isOpen", (_event, projectPath: string) => projectIsOpen(projectPath));
   ipcMain.handle("unity:installs", () => getUnityInstalls());
   ipcMain.handle("unity:launchOrFocus", (_event, project: ProjectEntry) => {
     const result = launchProject(project);
