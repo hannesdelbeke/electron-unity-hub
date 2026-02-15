@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld("launcherApi", {
   saveProject: (project: ProjectEntry) => ipcRenderer.invoke("projects:save", project),
   deleteProject: (id: string) => ipcRenderer.invoke("projects:delete", id),
   deleteCloudProject: (id: string) => ipcRenderer.invoke("projects:deleteCloud", id),
-  cloneCloudProject: (projectId: string, parentDir: string) => ipcRenderer.invoke("projects:cloneCloud", projectId, parentDir),
+  cloneCloudProject: (projectId: string, targetDir: string) => ipcRenderer.invoke("projects:cloneCloud", projectId, targetDir),
   removeMissingProjects: () => ipcRenderer.invoke("projects:removeMissing"),
   syncFromUnityHub: () => ipcRenderer.invoke("projects:syncFromUnityHub"),
   getSettings: () => ipcRenderer.invoke("settings:get"),
@@ -27,12 +27,12 @@ contextBridge.exposeInMainWorld("launcherApi", {
   browseTo: (targetPath: string) => ipcRenderer.invoke("path:browseTo", targetPath),
   openExternalUrl: (targetUrl: string) => ipcRenderer.invoke("url:openExternal", targetUrl),
   pickDirectory: () => ipcRenderer.invoke("dialog:pickDirectory"),
+  pickCloneTarget: (defaultParentDir: string, suggestedFolderName: string) =>
+    ipcRenderer.invoke("dialog:pickCloneTarget", defaultParentDir, suggestedFolderName),
   pickFile: () => ipcRenderer.invoke("dialog:pickFile"),
   cloneRepo: (repoUrl: string, targetDir: string, branch: string) =>
     ipcRenderer.invoke("repo:clone", repoUrl, targetDir, branch),
   getGitHubAuthStatus: () => ipcRenderer.invoke("github:getAuthStatus"),
-  setGitHubToken: (token: string) => ipcRenderer.invoke("github:setToken", token),
-  clearGitHubToken: () => ipcRenderer.invoke("github:clearToken"),
   discoverCloudProjects: () => ipcRenderer.invoke("github:discoverCloudProjects"),
   getGhStatus: () => ipcRenderer.invoke("gh:getStatus"),
   openGhInstall: () => ipcRenderer.invoke("gh:openInstall"),

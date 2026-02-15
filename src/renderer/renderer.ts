@@ -68,7 +68,6 @@ const addMenuInstalls = document.getElementById("add-menu-installs") as HTMLDivE
 const diskDialog = document.getElementById("disk-dialog") as HTMLDialogElement | null;
 const repoDialog = document.getElementById("repo-dialog") as HTMLDialogElement | null;
 const projectSettingsDialog = document.getElementById("project-settings-dialog") as HTMLDialogElement | null;
-const githubTokenDialog = document.getElementById("github-token-dialog") as HTMLDialogElement | null;
 
 const diskPath = document.getElementById("disk-path") as HTMLInputElement | null;
 const diskNickname = document.getElementById("disk-nickname") as HTMLInputElement | null;
@@ -89,7 +88,6 @@ const settingsAutoGetLatestDefault =
   document.getElementById("settings-auto-get-latest-default") as HTMLInputElement | null;
 const projectSettingsNickname = document.getElementById("project-settings-nickname") as HTMLInputElement | null;
 const projectSettingsAutoGetLatest = document.getElementById("project-settings-auto-get-latest") as HTMLInputElement | null;
-const githubTokenInput = document.getElementById("github-token-input") as HTMLInputElement | null;
 const settingsGithubStatus = document.getElementById("settings-github-status");
 const settingsGhInstallBtn = document.getElementById("settings-gh-install") as HTMLButtonElement | null;
 const settingsGhInstalledBtn = document.getElementById("settings-gh-installed") as HTMLButtonElement | null;
@@ -116,6 +114,7 @@ let editingProjectId = "";
 let didInit = false;
 let projectsRenderToken = 0;
 const projectRowCache = new Map<string, ProjectTableRow>();
+const busyProjectOps = new Map<string, string>();
 let activeStatusActivities = 0;
 let statusLoadingVisible = false;
 let statusLoadingRestoreText = "";
@@ -135,6 +134,7 @@ const customInstallsKey = "unityLauncher.customInstalls";
 type TabName = "projects" | "installs" | "settings";
 
 function setStatus(msg: string, tone: StatusTone = "success", autoResetMs = 0): void {
+  const normalizedMessage = msg.replace(/\s+/g, " ").trim();
   statusSetToken += 1;
   const tokenAtSet = statusSetToken;
   if (statusResetTimer) {
@@ -142,7 +142,7 @@ function setStatus(msg: string, tone: StatusTone = "success", autoResetMs = 0): 
     statusResetTimer = null;
   }
   if (statusEl) {
-    statusEl.textContent = msg;
+    statusEl.textContent = normalizedMessage;
     statusEl.classList.remove("status-success", "status-warning", "status-error", "status-info", "status-loading");
     statusEl.classList.add(`status-${tone}`);
     if (autoResetMs > 0) {
@@ -159,7 +159,7 @@ function setStatus(msg: string, tone: StatusTone = "success", autoResetMs = 0): 
   }
 }
 
-function setActionStatus(result: ActionResult, successAutoResetMs = 4000, errorAutoResetMs = 0): void {
+function setActionStatus(result: ActionResult, successAutoResetMs = 4000, errorAutoResetMs = 10000): void {
   setStatus(result.message, result.ok ? "success" : "error", result.ok ? successAutoResetMs : errorAutoResetMs);
 }
 
@@ -179,8 +179,11 @@ async function withActivity<T>(message: string, task: () => Promise<T>): Promise
     statusLoadingVisible = true;
     statusLoadingRestoreText = previousText;
     statusLoadingRestoreClassName = previousClassName;
-    setStatus(message, "info");
-    statusEl?.classList.add("status-loading");
+    if (statusEl) {
+      statusEl.textContent = message;
+      statusEl.classList.remove("status-success", "status-warning", "status-error", "status-info", "status-loading");
+      statusEl.classList.add("status-info", "status-loading");
+    }
   }, 300);
 
   try {
@@ -221,7 +224,7 @@ function activateTab(tab: TabName): void {
   viewSettings?.classList.toggle("active", tab === "settings");
 }
 
-function svgIcon(name: "warning" | "arrowDown" | "arrowUp" | "dot" | "moreHorizontal"): string {
+function svgIcon(name: "warning" | "arrowDown" | "arrowUp" | "dot" | "spinner" | "moreHorizontal"): string {
   switch (name) {
     case "warning":
       return "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 9v4m0 4h.01M10.29 3.86l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.71-3.14l-8-14a2 2 0 0 0-3.42 0z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
@@ -229,6 +232,8 @@ function svgIcon(name: "warning" | "arrowDown" | "arrowUp" | "dot" | "moreHorizo
       return "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 5v14m0 0-5-5m5 5 5-5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
     case "arrowUp":
       return "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 19V5m0 0-5 5m5-5 5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
+    case "spinner":
+      return "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M21 12a9 9 0 1 1-2.64-6.36\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\"/></svg>";
     default:
       return "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"2.5\" fill=\"currentColor\"/></svg>";
   }
@@ -260,8 +265,12 @@ function formatVcsText(vcs: VcsStatus): string {
   return `${vcs.kind} (${vcs.state}) down:${vcs.incomingCount} up:${vcs.outgoingCount} (${vcs.localChangesCount})${warn}`;
 }
 
-function formatVcsHtml(vcs: VcsStatus): string {
+function formatVcsHtml(vcs: VcsStatus, isBusy = false, busyLabel = ""): string {
   if (vcs.kind === "None") {
+    if (isBusy) {
+      const safeBusy = busyLabel.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
+      return `<div class="vcs-cell"><span class="vcs-kind">Git</span><span class="vcs-busy" title="${safeBusy || "Working..."}"><span class="vcs-busy-icon">${svgIcon("spinner")}</span></span></div>`;
+    }
     return "";
   }
   const safeInfo = (vcs.infoMessage ?? "").replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
@@ -291,7 +300,11 @@ function formatVcsHtml(vcs: VcsStatus): string {
   const changed = vcs.localChangesCount > 0
     ? metricWithIcon("dot", `(${vcs.localChangesCount})`, "Changed files", false, true)
     : "";
-  return `<div class="vcs-cell"><span class="vcs-kind">${icon}</span>${conflictWarn}${infoWarn}${changed}${outgoing}${incoming}</div>`;
+  const safeBusy = busyLabel.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
+  const busy = isBusy && vcs.kind === "Git"
+    ? `<span class="vcs-busy" title="${safeBusy || "Running git command"}"><span class="vcs-busy-icon">${svgIcon("spinner")}</span></span>`
+    : "";
+  return `<div class="vcs-cell"><span class="vcs-kind">${icon}</span>${busy}${conflictWarn}${infoWarn}${changed}${outgoing}${incoming}</div>`;
 }
 function formatLastOpened(iso: string): string {
   if (!iso) {
@@ -455,6 +468,43 @@ function closeInstallRowMenus(): void {
   openInstallMenuPath = "";
   document.querySelectorAll<HTMLElement>("#installs-table .row-menu").forEach((menu) => menu.classList.add("hidden"));
   document.querySelectorAll<HTMLElement>("#installs-table tbody tr.menu-open").forEach((row) => row.classList.remove("menu-open"));
+}
+
+function setProjectBusy(projectId: string, operation: string, busy: boolean): void {
+  if (busy) {
+    busyProjectOps.set(projectId, operation);
+  } else {
+    busyProjectOps.delete(projectId);
+  }
+  void renderProjectsTable();
+}
+
+async function withProjectBusy<T>(projectId: string, operation: string, task: () => Promise<T>): Promise<T> {
+  const startedAt = Date.now();
+  setProjectBusy(projectId, operation, true);
+  try {
+    return await task();
+  } finally {
+    const elapsed = Date.now() - startedAt;
+    const minVisibleMs = 350;
+    if (elapsed < minVisibleMs) {
+      await new Promise<void>((resolve) => setTimeout(resolve, minVisibleMs - elapsed));
+    }
+    setProjectBusy(projectId, "", false);
+  }
+}
+
+async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
+  const max = Math.max(1, limit);
+  let index = 0;
+  async function runner(): Promise<void> {
+    while (index < items.length) {
+      const current = index;
+      index += 1;
+      await worker(items[current]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(max, items.length || 1) }, () => runner()));
 }
 
 function createProjectEntry(partial: Partial<ProjectEntry>): ProjectEntry {
@@ -699,7 +749,7 @@ async function syncProjectRowCache(force = false): Promise<void> {
   }
 }
 
-async function refreshProjectInfoForId(id: string, updateStatus = true): Promise<void> {
+async function refreshProjectInfoForId(id: string, updateStatus = true, quick = false): Promise<void> {
   const project = projects.find((item) => item.id === id);
   if (!project) {
     if (updateStatus) {
@@ -717,7 +767,33 @@ async function refreshProjectInfoForId(id: string, updateStatus = true): Promise
     }
   }
 
-  const row = await withActivity("Updating project info...", () => buildProjectTableRow(effectiveProject));
+  let row: ProjectTableRow;
+  if (quick && effectiveProject.path.trim().length > 0) {
+    const previousSize = projectRowCache.get(id)?.sizeBytes ?? 0;
+    row = await withActivity("Updating project info...", async () => {
+      const [vcs, iconDataUrl, isOpen, remoteUrl, lastCommitIso] = await Promise.all([
+        window.launcherApi.getVcsStatus(effectiveProject.path),
+        window.launcherApi.getProjectIcon(effectiveProject.path),
+        window.launcherApi.isProjectOpen(effectiveProject.path),
+        window.launcherApi.getProjectRemoteUrl(effectiveProject.path),
+        window.launcherApi.getProjectLastCommitIso(effectiveProject.path),
+      ]);
+      return {
+        project: effectiveProject,
+        vcs,
+        isMissing: vcs.state === "missing path",
+        isOpen,
+        isCloud: Boolean((effectiveProject.cloudRepo ?? "").trim() || (effectiveProject.cloneUrl ?? "").trim()),
+        isInstalled: vcs.state !== "missing path",
+        remoteUrl,
+        modifiedIso: lastCommitIso || effectiveProject.lastOpenedIso || "",
+        sizeBytes: previousSize,
+        iconDataUrl,
+      };
+    });
+  } else {
+    row = await withActivity("Updating project info...", () => buildProjectTableRow(effectiveProject));
+  }
   projectRowCache.set(project.id, row);
   await renderProjectsTable();
   if (updateStatus) {
@@ -824,6 +900,12 @@ async function renderProjectsTable(): Promise<void> {
       tr.classList.add("selected");
     }
 
+    const busyOp = busyProjectOps.get(project.id) ?? "";
+    const isBusy = busyOp.length > 0;
+    if (isBusy) {
+      tr.classList.add("row-busy");
+    }
+
     const vcs = row.vcs;
     const isMissing = row.isMissing;
     const isOpen = row.isOpen;
@@ -877,7 +959,7 @@ async function renderProjectsTable(): Promise<void> {
     tr.appendChild(versionTd);
 
     const vcsTd = document.createElement("td");
-    vcsTd.appendChild(createCellContent(formatVcsHtml(vcs), true));
+    vcsTd.appendChild(createCellContent(formatVcsHtml(vcs, isBusy, busyOp), true));
     tr.appendChild(vcsTd);
 
     const lastOpenedTd = document.createElement("td");
@@ -910,6 +992,10 @@ async function renderProjectsTable(): Promise<void> {
     rowMenu.addEventListener("click", (event) => event.stopPropagation());
     actionsButton.addEventListener("click", (event) => {
       event.stopPropagation();
+      if (isBusy) {
+        setStatus("Please wait for git operation to finish.", "info", 2500);
+        return;
+      }
       const shouldOpen = openProjectMenuId !== project.id;
       closeProjectRowMenus();
       if (shouldOpen) {
@@ -938,26 +1024,32 @@ async function renderProjectsTable(): Promise<void> {
     const refreshBtn = createMenuItem("Refresh", "↻", async (event) => {
       event.stopPropagation();
       closeProjectRowMenus();
-      await refreshProjectInfoForId(project.id);
+      await withProjectBusy(project.id, "Refreshing project info...", async () => {
+        await refreshProjectInfoForId(project.id);
+      });
     });
 
     const commitPushBtn = createMenuItem("Commit & Push", "⬆", async (event) => {
       event.stopPropagation();
       closeProjectRowMenus();
-      const result = await withActivity("Committing and pushing...", () => window.launcherApi.gitCommitPush(project.path));
-      setActionStatus(result, 6000, 0);
-      if (!result.ok && result.conflict) {
-        window.alert("Commit & Push found merge conflicts while syncing latest changes. Resolve conflicts in your git client, then push again.");
-      }
-      await refreshProjectInfoForId(project.id, false);
+      await withProjectBusy(project.id, "Committing & pushing...", async () => {
+        const result = await withActivity("Committing and pushing...", () => window.launcherApi.gitCommitPush(project.path));
+        await refreshProjectInfoForId(project.id, false, true);
+        setActionStatus(result, 6000, 10000);
+        if (!result.ok && result.conflict) {
+          window.alert("Commit & Push found merge conflicts while syncing latest changes. Resolve conflicts in your git client, then push again.");
+        }
+      });
     });
 
     const pullBtn = createMenuItem("Pull", "⬇", async (event) => {
       event.stopPropagation();
       closeProjectRowMenus();
-      const result = await withActivity("Pulling latest changes...", () => window.launcherApi.gitPull(project.path));
-      setActionStatus(result, 6000, 0);
-      await refreshProjectInfoForId(project.id, false);
+      await withProjectBusy(project.id, "Pulling latest changes...", async () => {
+        const result = await withActivity("Pulling latest changes...", () => window.launcherApi.gitPull(project.path));
+        await refreshProjectInfoForId(project.id, false, true);
+        setActionStatus(result, 6000, 10000);
+      });
     });
 
     const remoteBtn = createMenuItem("Open Remote", "🌐", async (event) => {
@@ -975,14 +1067,28 @@ async function renderProjectsTable(): Promise<void> {
       event.stopPropagation();
       closeProjectRowMenus();
       const configuredDefault = getDefaultCloneDir();
-      const parentDir = configuredDefault || await window.launcherApi.pickDirectory();
-      if (!parentDir) {
+      const suggestedFolder = (project.name || project.nickname || "project").trim() || "project";
+      const targetDir = await window.launcherApi.pickCloneTarget(configuredDefault, suggestedFolder);
+      if (!targetDir) {
         setStatus("Clone cancelled");
         return;
       }
-      const result = await withActivity("Cloning cloud project...", () => window.launcherApi.cloneCloudProject(project.id, parentDir));
-      setActionStatus(result, 5000, 0);
-      await refreshProjects(false);
+      await withProjectBusy(project.id, "Cloning...", async () => {
+        const result = await withActivity(
+          `Cloning ${getDisplayName(project)}...`,
+          () => window.launcherApi.cloneCloudProject(project.id, targetDir),
+        );
+        if (result.ok) {
+          cloudProjects = await window.launcherApi.getCloudProjects();
+          projects = mergeProjects(dedupeProjects(result.projects), dedupeProjects(cloudProjects));
+          await syncProjectRowCache(true);
+          await renderProjectsTable();
+          setStatus("Cloud project cloned and installed.", "success", 6000);
+          return;
+        }
+        await refreshProjectInfoForId(project.id, false, true);
+        setActionStatus(result, 5000, 10000);
+      });
     });
 
     const removeBtn = createMenuItem("Remove", "🗑", async (event) => {
@@ -1021,6 +1127,10 @@ async function renderProjectsTable(): Promise<void> {
     tr.appendChild(actionsTd);
 
     tr.addEventListener("click", async () => {
+      if (isBusy) {
+        setStatus("Project is busy with source control operation.", "info", 3000);
+        return;
+      }
       selectedId = project.id;
       if (isMissing) {
         setStatus("Project path is missing");
@@ -1035,6 +1145,10 @@ async function renderProjectsTable(): Promise<void> {
 
     tr.addEventListener("contextmenu", (event) => {
       event.preventDefault();
+      if (isBusy) {
+        setStatus("Project is busy with source control operation.", "info", 3000);
+        return;
+      }
       selectedId = project.id;
       openInstallMenuPath = "";
       const shouldOpen = openProjectMenuId !== project.id;
@@ -1251,23 +1365,25 @@ async function autoGetLatestOnStartup(): Promise<void> {
   let failed = 0;
 
   await withActivity("Getting latest project changes...", async () => {
-    for (const project of targets) {
-      const vcs = await window.launcherApi.getVcsStatus(project.path);
-      if (vcs.kind !== "Git") {
-        skipped += 1;
-        continue;
-      }
-      const result = await window.launcherApi.gitPull(project.path);
-      if (result.ok) {
-        if (/already up to date/i.test(result.message)) {
-          upToDate += 1;
-        } else {
-          updated += 1;
+    await runWithConcurrency(targets, 2, async (project) => {
+      await withProjectBusy(project.id, "Auto get latest...", async () => {
+        const vcs = await window.launcherApi.getVcsStatus(project.path);
+        if (vcs.kind !== "Git") {
+          skipped += 1;
+          return;
         }
-      } else {
-        failed += 1;
-      }
-    }
+        const result = await window.launcherApi.gitPull(project.path);
+        if (result.ok) {
+          if (/already up to date/i.test(result.message)) {
+            upToDate += 1;
+          } else {
+            updated += 1;
+          }
+        } else {
+          failed += 1;
+        }
+      });
+    });
   });
 
   await syncProjectRowCache(true);
@@ -1351,7 +1467,7 @@ async function addFromRepo(): Promise<void> {
 
   const clone = await withActivity("Cloning repository...", () => window.launcherApi.cloneRepo(url, target, branch));
   if (!clone.ok) {
-    setActionStatus(clone, 5000, 0);
+    setActionStatus(clone, 5000, 10000);
     return;
   }
 
@@ -1602,16 +1718,13 @@ function wireSettingsView(): void {
       window.launcherApi.getGhStatus(),
     ]);
     if (settingsGithubStatus) {
-      if (status.connected) {
-        const source = status.source === "gh" ? "gh" : "token";
-        settingsGithubStatus.textContent = `Connected as ${status.login} (${source})`;
-      } else {
-        settingsGithubStatus.textContent = "GitHub not connected.";
-      }
+      settingsGithubStatus.textContent = status.connected
+        ? `Connected as ${status.login} (gh)`
+        : "GitHub not connected. Run `gh auth login`.";
     }
     if (settingsGhLabel) {
       settingsGhLabel.textContent = gh.installed
-        ? (gh.authenticated ? `Installed, authenticated as ${gh.login}.` : "Installed. Run `gh auth login` or use token below.")
+        ? (gh.authenticated ? `Installed, authenticated as ${gh.login}.` : "Installed. Run `gh auth login`.")
         : gh.installHint;
     }
     if (settingsGhInstallBtn) {
@@ -1632,34 +1745,9 @@ function wireSettingsView(): void {
     await refreshGitHubStatus();
   });
 
-  document.getElementById("settings-github-connect")?.addEventListener("click", () => {
-    githubTokenDialog?.showModal();
-  });
-
-  document.getElementById("github-token-save")?.addEventListener("click", async () => {
-    const token = requireValue(githubTokenInput);
-    if (!token) {
-      setStatus("GitHub token is required", "warning");
-      return;
-    }
-    const result = await withActivity("Connecting GitHub...", () => window.launcherApi.setGitHubToken(token));
-    if (result.ok && githubTokenInput) {
-      githubTokenInput.value = "";
-      githubTokenDialog?.close();
-    }
-    setActionStatus(result, 5000, 0);
-    await refreshGitHubStatus();
-  });
-
-  document.getElementById("settings-github-disconnect")?.addEventListener("click", async () => {
-    await window.launcherApi.clearGitHubToken();
-    await refreshGitHubStatus();
-    setStatus("GitHub disconnected", "success", 4000);
-  });
-
   document.getElementById("settings-github-refresh-cloud")?.addEventListener("click", async () => {
     const result = await withActivity("Fetching cloud projects...", () => window.launcherApi.discoverCloudProjects());
-    setActionStatus(result, 5000, 0);
+    setActionStatus(result, 5000, 10000);
     if (result.ok) {
       await refreshProjects(false);
     }
@@ -1713,6 +1801,8 @@ async function init(): Promise<void> {
 }
 
 void init();
+
+
 
 
 

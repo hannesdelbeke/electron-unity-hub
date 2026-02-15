@@ -163,12 +163,11 @@
       saveCloudProjects(next);
       return next;
     },
-    async cloneCloudProject(projectId, parentDir) {
+    async cloneCloudProject(projectId, targetDir) {
       const cloud = getCloudProjects();
       const target = cloud.find((item) => item.id === projectId);
       if (!target) return { ok: false, message: "Cloud project not found.", projects: getProjects() };
-      const folder = (target.name || "project").replace(/[<>:\"/\\\\|?*]+/g, "_");
-      const clonedPath = `${parentDir}/${folder}`;
+      const clonedPath = targetDir;
       const local = {
         ...target,
         id: randomId(),
@@ -272,6 +271,11 @@
     },
     async pickDirectory() {
       return window.prompt("Mock folder path", "D:/repos/new-project") || "";
+    },
+    async pickCloneTarget(defaultParentDir, suggestedFolderName) {
+      const base = (defaultParentDir || "D:/repos").replace(/[\\/]$/, "");
+      const name = (suggestedFolderName || "project").replace(/[<>:\"/\\\\|?*]+/g, "_");
+      return window.prompt("Mock clone target", `${base}/${name}`) || "";
     },
     async pickFile() {
       return window.prompt("Mock executable path", "D:/Unity/Editor/Unity.exe") || "";

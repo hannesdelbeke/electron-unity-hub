@@ -38,7 +38,7 @@ declare global {
       saveProject: (project: ProjectEntry) => Promise<ProjectEntry[]>;
       deleteProject: (id: string) => Promise<ProjectEntry[]>;
       deleteCloudProject: (id: string) => Promise<ProjectEntry[]>;
-      cloneCloudProject: (projectId: string, parentDir: string) => Promise<{ ok: boolean; message: string; projects: ProjectEntry[] }>;
+      cloneCloudProject: (projectId: string, targetDir: string) => Promise<{ ok: boolean; message: string; projects: ProjectEntry[] }>;
       removeMissingProjects: () => Promise<{ removed: number; remaining: number }>;
       syncFromUnityHub: () => Promise<{ ok: boolean; message: string; added: number }>;
       getSettings: () => Promise<{ disableRenderThrottling: boolean }>;
@@ -63,6 +63,7 @@ declare global {
       browseTo: (targetPath: string) => Promise<{ ok: boolean; message: string }>;
       openExternalUrl: (targetUrl: string) => Promise<{ ok: boolean; message: string }>;
       pickDirectory: () => Promise<string>;
+      pickCloneTarget: (defaultParentDir: string, suggestedFolderName: string) => Promise<string>;
       pickFile: () => Promise<string>;
       cloneRepo: (repoUrl: string, targetDir: string, branch: string) => Promise<{ ok: boolean; message: string }>;
       getGitHubAuthStatus: () => Promise<{
@@ -70,13 +71,11 @@ declare global {
         ghAuthenticated: boolean;
         connected: boolean;
         login: string;
-        source: "gh" | "token" | "none";
+        source: "gh" | "none";
         installHint: string;
         installUrl: string;
         message: string;
       }>;
-      setGitHubToken: (token: string) => Promise<{ ok: boolean; message: string }>;
-      clearGitHubToken: () => Promise<{ ok: boolean }>;
       discoverCloudProjects: () => Promise<{ ok: boolean; message: string; projects: ProjectEntry[] }>;
       getGhStatus: () => Promise<{
         installed: boolean;

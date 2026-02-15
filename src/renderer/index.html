@@ -169,10 +169,8 @@
           <div class="settings-row">
             <label>GitHub Cloud Projects</label>
             <div class="settings-actions">
-              <button id="settings-github-connect" class="btn" type="button">Connect</button>
-              <button id="settings-github-disconnect" class="btn" type="button">Disconnect</button>
               <button id="settings-github-refresh-cloud" class="btn" type="button">Refresh Cloud Projects</button>
-              <span id="settings-github-status" class="muted">GitHub not connected.</span>
+              <span id="settings-github-status" class="muted">Run `gh auth login` to connect GitHub.</span>
             </div>
           </div>
 
@@ -260,19 +258,6 @@
       <menu>
         <button value="cancel" type="button" class="btn" onclick="this.closest('dialog')?.close()">Cancel</button>
         <button id="project-settings-save" value="default" type="button" class="btn accent">Save</button>
-      </menu>
-    </form>
-  </dialog>
-
-  <dialog id="github-token-dialog" class="modal">
-    <form method="dialog" class="modal-form">
-      <h2>Connect GitHub</h2>
-      <label>Personal Access Token
-        <input id="github-token-input" type="password" placeholder="ghp_..." />
-      </label>
-      <menu>
-        <button value="cancel" type="button" class="btn" onclick="this.closest('dialog')?.close()">Cancel</button>
-        <button id="github-token-save" value="default" type="button" class="btn accent">Connect</button>
       </menu>
     </form>
   </dialog>
