@@ -1,15 +1,20 @@
 # Unity Launcher - Electron
 A more minimalistic Unity project launcher.  
+
+## Preview
+
+![Launcher Preview](./preview/launcher-preview.svg)
 [Test it in your browser](https://hannesdelbeke.github.io/electron-unity-hub/) with mock data.
+
+## Download
+Download the launcher from the releases on the right side.  
+Download `v1.0.0` [here](https://github.com/hannesdelbeke/electron-unity-hub/releases/download/1.0.0/Electron.Unity.Hub.1.0.0.exe) for Windows 
 
 ## Dev notes
 Project development instructions and architecture: [DEV.md](./DEV.md)
 
 Project TODOs are intentionally kept out of `DEV.md`. Use [TODO.md](./TODO.md) for task tracking.
 
-## Preview
-
-![Launcher Preview](./preview/launcher-preview.svg)
 
 ## Implemented features
 
