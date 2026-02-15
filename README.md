@@ -1,5 +1,5 @@
 # Unity Launcher - Electron
-A more minimalistic Unity project launcher.  
+A more minimalistic Unity project launcher, that integrates with Git & Perforce.  
 
 ## Preview
 
