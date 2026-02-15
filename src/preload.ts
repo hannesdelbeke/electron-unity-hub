@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld("launcherApi", {
   getProjectLastCommitIso: (projectPath: string) => ipcRenderer.invoke("project:lastCommitIso", projectPath),
   getProjectSizeBytes: (projectPath: string) => ipcRenderer.invoke("project:sizeBytes", projectPath),
   getVcsStatus: (projectPath: string) => ipcRenderer.invoke("vcs:status", projectPath),
+  gitCommitPush: (projectPath: string) => ipcRenderer.invoke("vcs:gitCommitPush", projectPath),
+  gitPull: (projectPath: string) => ipcRenderer.invoke("vcs:gitPull", projectPath),
   isProjectOpen: (projectPath: string) => ipcRenderer.invoke("project:isOpen", projectPath),
   getUnityInstalls: () => ipcRenderer.invoke("unity:installs"),
   launchOrFocus: (project: ProjectEntry) => ipcRenderer.invoke("unity:launchOrFocus", project),

@@ -736,7 +736,9 @@ tr.selected {
 }
 
 .menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   border: 0;
   background: transparent;
@@ -746,6 +748,17 @@ tr.selected {
   border-radius: 6px;
   font: inherit;
   cursor: pointer;
+}
+
+.menu-item-icon {
+  width: 24px;
+  text-align: center;
+  flex: 0 0 24px;
+  color: currentColor;
+  opacity: 1;
+  font-size: 1.5em;
+  line-height: 1;
+  font-variant-emoji: text;
 }
 
 .menu-item:hover {

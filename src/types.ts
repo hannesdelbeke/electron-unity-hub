@@ -47,6 +47,8 @@ declare global {
       getProjectLastCommitIso: (projectPath: string) => Promise<string>;
       getProjectSizeBytes: (projectPath: string) => Promise<number>;
       getVcsStatus: (projectPath: string) => Promise<VcsStatus>;
+      gitCommitPush: (projectPath: string) => Promise<{ ok: boolean; message: string; conflict?: boolean }>;
+      gitPull: (projectPath: string) => Promise<{ ok: boolean; message: string; conflict?: boolean }>;
       isProjectOpen: (projectPath: string) => Promise<boolean>;
       getUnityInstalls: () => Promise<UnityInstall[]>;
       launchOrFocus: (project: ProjectEntry) => Promise<{

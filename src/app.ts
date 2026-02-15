@@ -736,6 +736,20 @@ function runToolWithResult(cmd: string, args: string[]): { status: number | null
   };
 }
 
+function runWithResultTimeout(
+  cmd: string,
+  args: string[],
+  cwd: string,
+  timeout: number,
+): { status: number | null; stdout: string; stderr: string } {
+  const p = spawnSync(cmd, args, { cwd, encoding: "utf-8", timeout });
+  return {
+    status: p.status,
+    stdout: (p.stdout ?? "").trim(),
+    stderr: (p.stderr ?? "").trim(),
+  };
+}
+
 function getGhToken(): string {
   if (!commandExists("gh")) {
     return "";
@@ -1210,6 +1224,100 @@ function getVcsStatus(projectPath: string): VcsStatus {
     return plasticStatus(projectPath);
   }
   return emptyVcsStatus("None", "", "not detected");
+}
+
+function gitCommitAndPush(projectPath: string): { ok: boolean; message: string; conflict?: boolean } {
+  if (!projectPath.trim() || !existsSync(projectPath)) {
+    return { ok: false, message: "Project path is missing." };
+  }
+  if (!isGitRepo(projectPath)) {
+    return { ok: false, message: "Commit & Push supports git projects only." };
+  }
+
+  const addRes = runWithResultTimeout("git", ["add", "-A"], projectPath, 60_000);
+  if (addRes.status !== 0) {
+    return { ok: false, message: addRes.stderr || "Failed to stage changes." };
+  }
+
+  const diffRes = runWithResultTimeout("git", ["diff", "--cached", "--quiet"], projectPath, 10_000);
+  if (diffRes.status === 0) {
+    return { ok: true, message: "Nothing to commit." };
+  }
+
+  const stamp = new Date().toISOString().replace("T", " ").slice(0, 16);
+  const commitMessage = `Update from Electron Unity Hub (${stamp} UTC)`;
+  const commitRes = runWithResultTimeout("git", ["commit", "-m", commitMessage], projectPath, 60_000);
+  if (commitRes.status !== 0) {
+    return { ok: false, message: commitRes.stderr || commitRes.stdout || "Commit failed." };
+  }
+
+  const pushRes = runWithResultTimeout("git", ["push"], projectPath, 90_000);
+  if (pushRes.status === 0) {
+    return { ok: true, message: "Committed and pushed changes." };
+  }
+
+  const pushErr = `${pushRes.stderr}\n${pushRes.stdout}`.toLowerCase();
+  const outOfDate = pushErr.includes("non-fast-forward")
+    || pushErr.includes("fetch first")
+    || pushErr.includes("rejected");
+  if (outOfDate) {
+    const pullRebaseRes = runWithResultTimeout("git", ["pull", "--rebase", "--autostash"], projectPath, 120_000);
+    if (pullRebaseRes.status !== 0) {
+      const rebaseOutput = `${pullRebaseRes.stderr}\n${pullRebaseRes.stdout}`.toLowerCase();
+      const hasConflict = rebaseOutput.includes("conflict") || rebaseOutput.includes("could not apply");
+      if (hasConflict) {
+        return {
+          ok: false,
+          message: "Push blocked: remote has newer changes and auto-rebase found conflicts. Resolve conflicts and push again.",
+          conflict: true,
+        };
+      }
+      return { ok: false, message: pullRebaseRes.stderr || pullRebaseRes.stdout || "Pull/rebase failed before push." };
+    }
+
+    const pushAfterRebaseRes = runWithResultTimeout("git", ["push"], projectPath, 90_000);
+    if (pushAfterRebaseRes.status === 0) {
+      return { ok: true, message: "Committed, synced latest changes, and pushed." };
+    }
+    return { ok: false, message: pushAfterRebaseRes.stderr || pushAfterRebaseRes.stdout || "Push failed after sync." };
+  }
+
+  const branch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], projectPath) || "";
+  if (branch && branch !== "HEAD") {
+    const upstreamPush = runWithResultTimeout("git", ["push", "-u", "origin", branch], projectPath, 90_000);
+    if (upstreamPush.status === 0) {
+      return { ok: true, message: "Committed and pushed changes." };
+    }
+      return { ok: false, message: upstreamPush.stderr || pushRes.stderr || "Push failed." };
+  }
+
+  return { ok: false, message: pushRes.stderr || "Push failed. Branch has no upstream." };
+}
+
+function gitPull(projectPath: string): { ok: boolean; message: string } {
+  if (!projectPath.trim() || !existsSync(projectPath)) {
+    return { ok: false, message: "Project path is missing." };
+  }
+  if (!isGitRepo(projectPath)) {
+    return { ok: false, message: "Pull supports git projects only." };
+  }
+
+  const fetchRes = runWithResultTimeout("git", ["fetch", "--prune"], projectPath, 90_000);
+  if (fetchRes.status !== 0) {
+    return { ok: false, message: fetchRes.stderr || "Fetch failed." };
+  }
+
+  const pullRes = runWithResultTimeout("git", ["pull", "--ff-only"], projectPath, 90_000);
+  if (pullRes.status !== 0) {
+    return {
+      ok: false,
+      message: pullRes.stderr || pullRes.stdout || "Pull failed. Resolve divergence manually.",
+    };
+  }
+  if ((pullRes.stdout || "").toLowerCase().includes("already up to date")) {
+    return { ok: true, message: "Already up to date." };
+  }
+  return { ok: true, message: "Pulled latest changes." };
 }
 
 function projectIsOpen(projectPath: string): boolean {
@@ -1904,6 +2012,8 @@ app.whenReady().then(() => {
   ipcMain.handle("project:lastCommitIso", (_event, projectPath: string) => getProjectLastCommitIso(projectPath));
   ipcMain.handle("project:sizeBytes", (_event, projectPath: string) => getProjectSizeBytes(projectPath));
   ipcMain.handle("vcs:status", (_event, projectPath: string) => getVcsStatus(projectPath));
+  ipcMain.handle("vcs:gitCommitPush", (_event, projectPath: string) => gitCommitAndPush(projectPath));
+  ipcMain.handle("vcs:gitPull", (_event, projectPath: string) => gitPull(projectPath));
   ipcMain.handle("project:isOpen", (_event, projectPath: string) => projectIsOpen(projectPath));
   ipcMain.handle("unity:installs", () => getUnityInstalls());
   ipcMain.handle("unity:launchOrFocus", (_event, project: ProjectEntry) => {

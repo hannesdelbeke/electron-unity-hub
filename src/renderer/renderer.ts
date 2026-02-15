@@ -51,6 +51,7 @@ type ProjectTableRow = {
 type ActionResult = {
   ok: boolean;
   message: string;
+  conflict?: boolean;
 };
 
 const tbody = document.querySelector<HTMLTableSectionElement>("#projects-table tbody");
@@ -312,6 +313,27 @@ function createCellContent(value: string, asHtml = false): HTMLDivElement {
     content.appendChild(text);
   }
   return content;
+}
+
+function createMenuItem(
+  label: string,
+  icon: string,
+  onClick: (event: MouseEvent) => void | Promise<void>,
+  danger = false,
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.className = danger ? "menu-item danger-item" : "menu-item";
+  button.type = "button";
+  const iconEl = document.createElement("span");
+  iconEl.className = "menu-item-icon";
+  iconEl.setAttribute("aria-hidden", "true");
+  iconEl.textContent = icon;
+  const textEl = document.createElement("span");
+  textEl.textContent = label;
+  button.appendChild(iconEl);
+  button.appendChild(textEl);
+  button.addEventListener("click", onClick);
+  return button;
 }
 
 function compareValues(left: string | number | boolean, right: string | number | boolean): number {
@@ -807,22 +829,14 @@ async function renderProjectsTable(): Promise<void> {
     });
     actionsWrap.appendChild(actionsButton);
 
-    const settingsBtn = document.createElement("button");
-    settingsBtn.className = "menu-item";
-    settingsBtn.type = "button";
-    settingsBtn.textContent = "Settings";
-    settingsBtn.addEventListener("click", (event) => {
+    const settingsBtn = createMenuItem("Settings", "⚙", (event) => {
       event.stopPropagation();
       closeProjectRowMenus();
       openProjectSettings(project);
       void renderProjectsTable();
     });
 
-    const browseBtn = document.createElement("button");
-    browseBtn.className = "menu-item";
-    browseBtn.type = "button";
-    browseBtn.textContent = "Browse to";
-    browseBtn.addEventListener("click", async (event) => {
+    const browseBtn = createMenuItem("Browse to", "📁", async (event) => {
       event.stopPropagation();
       closeProjectRowMenus();
       const result = await window.launcherApi.browseTo(project.path);
@@ -830,21 +844,32 @@ async function renderProjectsTable(): Promise<void> {
       void renderProjectsTable();
     });
 
-    const refreshBtn = document.createElement("button");
-    refreshBtn.className = "menu-item";
-    refreshBtn.type = "button";
-    refreshBtn.textContent = "Refresh";
-    refreshBtn.addEventListener("click", async (event) => {
+    const refreshBtn = createMenuItem("Refresh", "↻", async (event) => {
       event.stopPropagation();
       closeProjectRowMenus();
       await refreshProjectInfoForId(project.id);
     });
 
-    const remoteBtn = document.createElement("button");
-    remoteBtn.className = "menu-item";
-    remoteBtn.type = "button";
-    remoteBtn.textContent = "Open Remote";
-    remoteBtn.addEventListener("click", async (event) => {
+    const commitPushBtn = createMenuItem("Commit & Push", "⬆", async (event) => {
+      event.stopPropagation();
+      closeProjectRowMenus();
+      const result = await withActivity("Committing and pushing...", () => window.launcherApi.gitCommitPush(project.path));
+      setActionStatus(result, 6000, 0);
+      if (!result.ok && result.conflict) {
+        window.alert("Commit & Push found merge conflicts while syncing latest changes. Resolve conflicts in your git client, then push again.");
+      }
+      await refreshProjectInfoForId(project.id, false);
+    });
+
+    const pullBtn = createMenuItem("Pull", "⬇", async (event) => {
+      event.stopPropagation();
+      closeProjectRowMenus();
+      const result = await withActivity("Pulling latest changes...", () => window.launcherApi.gitPull(project.path));
+      setActionStatus(result, 6000, 0);
+      await refreshProjectInfoForId(project.id, false);
+    });
+
+    const remoteBtn = createMenuItem("Open Remote", "🌐", async (event) => {
       event.stopPropagation();
       closeProjectRowMenus();
       if (!remoteUrl) {
@@ -855,11 +880,7 @@ async function renderProjectsTable(): Promise<void> {
       setActionStatus(result, 4000, 7000);
     });
 
-    const cloneBtn = document.createElement("button");
-    cloneBtn.className = "menu-item";
-    cloneBtn.type = "button";
-    cloneBtn.textContent = "Clone";
-    cloneBtn.addEventListener("click", async (event) => {
+    const cloneBtn = createMenuItem("Clone", "⭳", async (event) => {
       event.stopPropagation();
       closeProjectRowMenus();
       const parentDir = await window.launcherApi.pickDirectory();
@@ -872,11 +893,7 @@ async function renderProjectsTable(): Promise<void> {
       await refreshProjects(false);
     });
 
-    const removeBtn = document.createElement("button");
-    removeBtn.className = "menu-item danger-item";
-    removeBtn.type = "button";
-    removeBtn.textContent = "Remove";
-    removeBtn.addEventListener("click", async (event) => {
+    const removeBtn = createMenuItem("Remove", "🗑", async (event) => {
       event.stopPropagation();
       closeProjectRowMenus();
       if (!project.path.trim()) {
@@ -887,12 +904,16 @@ async function renderProjectsTable(): Promise<void> {
         return;
       }
       await removeProjectById(project.id);
-    });
+    }, true);
 
     if (project.path.trim()) {
       rowMenu.appendChild(settingsBtn);
       rowMenu.appendChild(browseBtn);
       rowMenu.appendChild(refreshBtn);
+      if (vcs.kind === "Git") {
+        rowMenu.appendChild(commitPushBtn);
+        rowMenu.appendChild(pullBtn);
+      }
       if (remoteUrl) {
         rowMenu.appendChild(remoteBtn);
       }
@@ -1034,24 +1055,16 @@ function renderInstallsTable(): void {
     });
     actionsWrap.appendChild(actionsButton);
 
-    const removeBtn = document.createElement("button");
-    removeBtn.className = "menu-item danger-item";
-    removeBtn.type = "button";
-    removeBtn.textContent = "Remove";
-    removeBtn.addEventListener("click", (event) => {
+    const removeBtn = createMenuItem("Remove", "🗑", (event) => {
       event.stopPropagation();
       dismissInstallPath(install.path);
       openInstallMenuPath = "";
       installs = installs.filter((item) => item.path.toLowerCase() !== install.path.toLowerCase());
       renderInstallsTable();
       setStatus("Install removed");
-    });
+    }, true);
 
-    const browseBtn = document.createElement("button");
-    browseBtn.className = "menu-item";
-    browseBtn.type = "button";
-    browseBtn.textContent = "Browse to";
-    browseBtn.addEventListener("click", async (event) => {
+    const browseBtn = createMenuItem("Browse to", "📁", async (event) => {
       event.stopPropagation();
       closeInstallRowMenus();
       const result = await window.launcherApi.browseTo(install.path);
