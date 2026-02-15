@@ -105,9 +105,14 @@ Use this checklist after major UI or behavior updates:
 
 - Include a Codex co-author trailer on commits made with Codex assistance.
 - Also include the active model name as an additional co-author trailer.
+- Use the most specific active model identifier available (include version and tier/variant when known).
 - Preferred trailer formats:
   - `Co-authored-by: Codex <codex@openai.com>`
   - `Co-authored-by: <ActiveModelName> <model@openai.com>`
+- Examples:
+  - `Co-authored-by: GPT-5.3 <gpt-5.3@openai.com>`
+  - `Co-authored-by: Claude Sonnet 4.3 <claude-sonnet-4.3@anthropic.com>`
+  - `Co-authored-by: Claude Fast 4.3 <claude-fast-4.3@anthropic.com>`
 
 ## Build and Run
 
