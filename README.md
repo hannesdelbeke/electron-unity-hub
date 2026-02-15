@@ -7,8 +7,7 @@ You can [test a demo in your browser](https://hannesdelbeke.github.io/electron-u
 ![Launcher Preview](./preview/launcher-preview.svg)
 
 ## Download
-Download the launcher from the releases on the right side.  
-Download `v1.0.0` [here](https://github.com/hannesdelbeke/electron-unity-hub/releases/download/1.0.0/Electron.Unity.Hub.1.0.0.exe) for Windows 
+Download the launcher from the latest [release](https://github.com/hannesdelbeke/electron-unity-hub/releases).
 
 ## Dev notes
 Project development instructions and architecture: [DEV.md](./DEV.md)
