@@ -544,6 +544,11 @@ tr.selected {
   gap: 4px;
 }
 
+.vcs-metric.active {
+  color: #d3a327;
+  font-weight: 600;
+}
+
 .vcs-metric-icon {
   width: 12px;
   height: 12px;
@@ -568,6 +573,23 @@ tr.selected {
 }
 
 .vcs-warn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.editor-missing-warn {
+  color: var(--warning-text);
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  flex: 0 0 auto;
+}
+
+.editor-missing-warn svg {
   width: 14px;
   height: 14px;
   display: block;
