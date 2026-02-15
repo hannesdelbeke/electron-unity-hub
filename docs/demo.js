@@ -12,10 +12,11 @@
   const viewSettings = document.getElementById("view-settings");
 
   const searchInput = document.getElementById("search");
+  const searchInstallsInput = document.getElementById("search-installs");
   const addToggle = document.getElementById("add-toggle");
   const addMenu = document.getElementById("add-menu");
-  const projectsMoreToggle = document.getElementById("projects-more-toggle");
-  const projectsMoreMenu = document.getElementById("projects-more-menu");
+  const addToggleInstalls = document.getElementById("add-toggle-installs");
+  const addMenuInstalls = document.getElementById("add-menu-installs");
 
   const diskDialog = document.getElementById("disk-dialog");
   const repoDialog = document.getElementById("repo-dialog");
@@ -32,6 +33,7 @@
 
   let selectedId = "";
   let searchText = "";
+  let searchInstallsText = "";
 
   /** @type {Array<{id:string,nickname:string,name:string,path:string,unityVersion:string,vcs:string,lastOpenedIso:string,missing:boolean}>} */
   let projects = [
@@ -99,10 +101,7 @@
 
   function closeAddMenu() {
     addMenu.classList.add("hidden");
-  }
-
-  function closeProjectsMenu() {
-    projectsMoreMenu.classList.add("hidden");
+    addMenuInstalls.classList.add("hidden");
   }
 
   function filteredProjects() {
@@ -142,7 +141,13 @@
 
   function renderInstalls() {
     installsTableBody.innerHTML = "";
-    for (const install of installs) {
+    const q = searchInstallsText.trim().toLowerCase();
+    const visibleInstalls = !q
+      ? installs
+      : installs.filter((install) =>
+          [install.version, install.path, install.source].some((value) => value.toLowerCase().includes(q)),
+        );
+    for (const install of visibleInstalls) {
       const tr = document.createElement("tr");
       tr.classList.add("clickable");
       tr.innerHTML = `
@@ -225,24 +230,26 @@
 
   addToggle.addEventListener("click", () => {
     addMenu.classList.toggle("hidden");
-    closeProjectsMenu();
+    addMenuInstalls.classList.add("hidden");
   });
-
-  projectsMoreToggle.addEventListener("click", () => {
-    projectsMoreMenu.classList.toggle("hidden");
-    closeAddMenu();
+  addToggleInstalls.addEventListener("click", () => {
+    addMenuInstalls.classList.toggle("hidden");
+    addMenu.classList.add("hidden");
   });
 
   document.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     if (!target.closest(".add-wrap")) closeAddMenu();
-    if (!target.closest(".projects-more-wrap")) closeProjectsMenu();
   });
 
   searchInput.addEventListener("input", () => {
     searchText = searchInput.value;
     renderProjects();
+  });
+  searchInstallsInput.addEventListener("input", () => {
+    searchInstallsText = searchInstallsInput.value;
+    renderInstalls();
   });
 
   document.getElementById("new-project").addEventListener("click", () => {
@@ -269,30 +276,20 @@
     setStatus("Demo projects refreshed");
   });
 
-  document.getElementById("delete-btn").addEventListener("click", () => {
-    if (!selectedId) {
-      setStatus("Select a project first");
-      return;
-    }
-    projects = projects.filter((project) => project.id !== selectedId);
-    selectedId = "";
-    renderProjects();
-    setStatus("Demo: project removed");
-  });
-
   document.getElementById("refresh-installs").addEventListener("click", () => {
     renderInstalls();
     setStatus("Demo installs refreshed");
   });
-
-  document.getElementById("projects-menu-settings").addEventListener("click", () => {
-    closeProjectsMenu();
-    activateTab("settings");
-  });
-
-  document.getElementById("projects-menu-remove").addEventListener("click", () => {
-    closeProjectsMenu();
-    document.getElementById("delete-btn").click();
+  document.getElementById("add-install-disk").addEventListener("click", () => {
+    closeAddMenu();
+    installs.unshift({
+      version: "manual",
+      path: "D:/Unity/Custom/Editor/Unity.exe",
+      source: "Manual",
+      exists: true,
+    });
+    renderInstalls();
+    setStatus("Demo: install added");
   });
 
   document.getElementById("settings-save").addEventListener("click", () => {

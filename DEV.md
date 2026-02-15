@@ -80,6 +80,8 @@ Demo constraints:
 - Update `DEV.md` when architecture or key workflows change.
 - Keep task planning in `TODO.md`, not in this file.
 - Keep the GitHub Pages preview up to date after every major change.
+- Keep the GitHub Pages experience interactive (single live mock app), not duplicate static + interactive launchers.
+- GitHub Pages demo is built from app source automatically on every push to `main`/`master`; do not hand-edit or manually deploy `docs/` for routine updates.
 - Maintain GitHub Actions packaging so end users can download builds without using npm/terminal.
 - Always render and publish preview screenshots in dark mode.
 - Use `docs/launcher-preview.svg` as the canonical preview asset (do not keep PNG duplicates).
@@ -95,6 +97,7 @@ Use this checklist after major UI or behavior updates:
 - Update the browser demo in `docs/` to reflect current UX and flows.
 - Verify `docs/index.html` preview works locally.
 - Push updates so GitHub Pages reflects the latest major change.
+- Do not create manual deploy/build commits for Pages; deployment is handled by GitHub Actions.
 - Confirm README links/screenshots still match current behavior.
 - Confirm GitHub Actions build succeeds and produces downloadable app artifacts.
 
@@ -130,6 +133,14 @@ npm run package:win
 - Workflow file: `.github/workflows/build.yml`
 - Trigger: pushes to `main` and `master` (plus manual dispatch)
 - Output: downloadable Windows build artifact from the `release/` folder
+
+## GitHub Pages Deploy
+
+- Workflow file: `.github/workflows/pages.yml`
+- Trigger: every push to `main` and `master` (plus manual dispatch)
+- Build step: `npm run build:pages` (generates `pages-dist/` from current source + mock browser API)
+- Deploy source: `pages-dist/`
+- Deployment is automated; no manual Pages deploy step is required.
 
 ## Testing (AI Agent Instructions)
 

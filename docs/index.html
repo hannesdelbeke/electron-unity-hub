@@ -7,14 +7,6 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <section class="preview-banner">
-    <div class="preview-scroll">
-      <figure class="preview-frame">
-        <img class="preview-image" src="./launcher-preview.svg" alt="Launcher dark mode preview" />
-      </figure>
-    </div>
-  </section>
-
   <section class="demo-scroll">
   <main class="shell">
     <aside class="sidebar">
@@ -37,13 +29,6 @@
       <section id="view-projects" class="view active">
         <section class="toolbar">
           <h1>Projects <span class="badge">Demo</span></h1>
-          <div class="projects-more-wrap">
-            <button id="projects-more-toggle" class="icon-btn" aria-label="Project menu">...</button>
-            <div id="projects-more-menu" class="menu hidden">
-              <button id="projects-menu-settings" class="menu-item">Open settings</button>
-              <button id="projects-menu-remove" class="menu-item">Remove selected project</button>
-            </div>
-          </div>
           <input id="search" type="search" placeholder="Search projects" />
           <div class="add-wrap">
             <button id="add-toggle" class="btn">Add</button>
@@ -72,16 +57,22 @@
         </section>
 
         <section class="footer-actions">
-          <button id="delete-btn" class="btn danger">Remove</button>
-          <button id="refresh-btn" class="btn">Refresh</button>
+          <button id="refresh-btn" class="btn">↻</button>
           <span id="status">Demo mode with mock data</span>
         </section>
       </section>
 
       <section id="view-installs" class="view">
-        <section class="toolbar installs-toolbar">
+        <section class="toolbar">
           <h1>Installs <span class="badge">Demo</span></h1>
-          <button id="refresh-installs" class="btn">Refresh Installs</button>
+          <input id="search-installs" type="search" placeholder="Search installs" />
+          <div class="add-wrap">
+            <button id="add-toggle-installs" class="btn">Add</button>
+            <div id="add-menu-installs" class="menu hidden">
+              <button id="add-install-disk" class="menu-item">Add executable</button>
+            </div>
+          </div>
+          <button id="refresh-installs" class="btn">↻</button>
         </section>
 
         <section class="projects-panel">

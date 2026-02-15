@@ -53,7 +53,7 @@ Then open `http://localhost:8080`.
 
 ## Notes
 
-- Desktop app data is stored in `projects.json` in the repo root.
+- Desktop app data is stored in the OS user data folder (`app.getPath("userData")`) as `projects.json`.
 - Git information is read using `git` CLI if available.
 - Perforce information is read using `p4` CLI if available.
 - The desktop app is intentionally read-only for source control status (no submit/sync actions).

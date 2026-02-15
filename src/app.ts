@@ -15,7 +15,9 @@ type StoreShape = {
   meta: StoreMeta;
 };
 
-const dataFile = path.join(app.getAppPath(), "projects.json");
+function getDataFile(): string {
+  return path.join(app.getPath("userData"), "projects.json");
+}
 
 function normalizePath(inputPath: string): string {
   const resolved = path.resolve(inputPath);
@@ -30,6 +32,7 @@ function emptyStore(): StoreShape {
 }
 
 function loadStore(): StoreShape {
+  const dataFile = getDataFile();
   if (!existsSync(dataFile)) {
     return emptyStore();
   }
@@ -45,6 +48,7 @@ function loadStore(): StoreShape {
 }
 
 function saveStore(store: StoreShape): void {
+  const dataFile = getDataFile();
   writeFileSync(dataFile, `${JSON.stringify(store, null, 2)}\n`, "utf-8");
 }
 
@@ -643,6 +647,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  const dataFile = getDataFile();
   const dir = path.dirname(dataFile);
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
