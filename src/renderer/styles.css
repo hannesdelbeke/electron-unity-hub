@@ -497,7 +497,7 @@ tr.selected {
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--text);
-  height: 36px;
+  height: 38px;
   padding: 0 14px;
   border-radius: 8px;
   cursor: pointer;
@@ -531,7 +531,7 @@ tr.selected {
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--text);
-  height: 40px;
+  height: 38px;
   min-width: 44px;
   padding: 0 12px;
   border-radius: 8px;
@@ -548,8 +548,8 @@ tr.selected {
 }
 
 .row-action-btn {
-  height: 36px;
-  min-width: 36px;
+  height: 38px;
+  min-width: 38px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -557,9 +557,14 @@ tr.selected {
   border-radius: 6px;
 }
 
+.row-action-btn:hover,
+.row-action-btn:focus-visible {
+  filter: brightness(2);
+}
+
 .topbar-refresh-btn {
-  height: 34px;
-  min-width: 34px;
+  height: 38px;
+  min-width: 38px;
   padding: 0;
   border-radius: 8px;
   font-size: 18px;

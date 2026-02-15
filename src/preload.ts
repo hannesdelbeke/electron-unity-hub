@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("launcherApi", {
   getUnityInstalls: () => ipcRenderer.invoke("unity:installs"),
   launchOrFocus: (project: ProjectEntry) => ipcRenderer.invoke("unity:launchOrFocus", project),
   launchUnityEditor: (editorPath: string) => ipcRenderer.invoke("unity:launchEditor", editorPath),
+  browseTo: (targetPath: string) => ipcRenderer.invoke("path:browseTo", targetPath),
   pickDirectory: () => ipcRenderer.invoke("dialog:pickDirectory"),
   pickFile: () => ipcRenderer.invoke("dialog:pickFile"),
   cloneRepo: (repoUrl: string, targetDir: string, branch: string) =>

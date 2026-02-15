@@ -58,10 +58,12 @@ Need for demo:
 - Share a clickable preview from README.
 - Keep demo independent of native Electron APIs.
 
-Demo files:
-- `docs/index.html`
-- `docs/styles.css`
-- `docs/demo.js`
+Demo generation files:
+- `src/renderer/index.html`
+- `src/renderer/styles.css`
+- `src/renderer/renderer.ts`
+- `scripts/pages/mock-launcher-api.js`
+- `scripts/build-pages.mjs`
 
 Demo constraints:
 - Mock data only.
@@ -81,11 +83,9 @@ Demo constraints:
 - Keep task planning in `TODO.md`, not in this file.
 - Keep the GitHub Pages preview up to date after every major change.
 - Keep the GitHub Pages experience interactive (single live mock app), not duplicate static + interactive launchers.
-- GitHub Pages demo is built from app source automatically on every push to `main`/`master`; do not hand-edit or manually deploy `docs/` for routine updates.
+- GitHub Pages demo is built from app source automatically on every push to `main`/`master`; do not hand-edit generated site output for routine updates.
 - Maintain GitHub Actions packaging so end users can download builds without using npm/terminal.
 - Always render and publish preview screenshots in dark mode.
-- Use `docs/launcher-preview.svg` as the canonical preview asset (do not keep PNG duplicates).
-- After updating the preview, ensure `README.md` references `docs/launcher-preview.svg`.
 - GitHub Pages preview media must use a max display size to avoid oversized rendering.
 - GitHub Pages preview should preserve widescreen layout; on mobile/tablet use horizontal scrolling instead of compressing to a narrow layout when needed.
 
@@ -94,8 +94,8 @@ Demo constraints:
 Use this checklist after major UI or behavior updates:
 
 - Update desktop app files and verify `npm run build` passes.
-- Update the browser demo in `docs/` to reflect current UX and flows.
-- Verify `docs/index.html` preview works locally.
+- Update renderer and mock API used by Pages generation.
+- Verify generated `pages-dist/index.html` works locally after `npm run build:pages`.
 - Push updates so GitHub Pages reflects the latest major change.
 - Do not create manual deploy/build commits for Pages; deployment is handled by GitHub Actions.
 - Confirm README links/screenshots still match current behavior.
@@ -104,8 +104,10 @@ Use this checklist after major UI or behavior updates:
 ## Commit Policy
 
 - Include a Codex co-author trailer on commits made with Codex assistance.
-- Preferred trailer format:
+- Also include the active model name as an additional co-author trailer.
+- Preferred trailer formats:
   - `Co-authored-by: Codex <codex@openai.com>`
+  - `Co-authored-by: <ActiveModelName> <model@openai.com>`
 
 ## Build and Run
 
@@ -131,7 +133,7 @@ npm run package:win
 ## CI Build Artifacts
 
 - Workflow file: `.github/workflows/build.yml`
-- Trigger: pushes to `main` and `master` (plus manual dispatch)
+- Trigger: published releases (plus manual dispatch)
 - Output: downloadable Windows build artifact from the `release/` folder
 
 ## GitHub Pages Deploy
@@ -169,7 +171,8 @@ Expected outcome:
 Static demo local preview:
 
 ```bash
-cd docs
+npm run build:pages
+cd pages-dist
 python -m http.server 8080
 ```
 

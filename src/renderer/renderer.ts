@@ -492,6 +492,18 @@ async function renderProjectsTable(): Promise<void> {
       void renderProjectsTable();
     });
 
+    const browseBtn = document.createElement("button");
+    browseBtn.className = "menu-item";
+    browseBtn.type = "button";
+    browseBtn.textContent = "Browse to";
+    browseBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      closeProjectRowMenus();
+      const result = await window.launcherApi.browseTo(project.path);
+      setStatus(result.message);
+      void renderProjectsTable();
+    });
+
     const removeBtn = document.createElement("button");
     removeBtn.className = "menu-item danger-item";
     removeBtn.type = "button";
@@ -503,6 +515,7 @@ async function renderProjectsTable(): Promise<void> {
     });
 
     rowMenu.appendChild(settingsBtn);
+    rowMenu.appendChild(browseBtn);
     rowMenu.appendChild(removeBtn);
     actionsWrap.appendChild(rowMenu);
     actionsTd.appendChild(actionsWrap);
@@ -635,6 +648,19 @@ function renderInstallsTable(): void {
       setStatus("Install removed");
     });
 
+    const browseBtn = document.createElement("button");
+    browseBtn.className = "menu-item";
+    browseBtn.type = "button";
+    browseBtn.textContent = "Browse to";
+    browseBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      closeInstallRowMenus();
+      const result = await window.launcherApi.browseTo(install.path);
+      setStatus(result.message);
+      renderInstallsTable();
+    });
+
+    rowMenu.appendChild(browseBtn);
     rowMenu.appendChild(removeBtn);
     actionsWrap.appendChild(rowMenu);
     actionsTd.appendChild(actionsWrap);

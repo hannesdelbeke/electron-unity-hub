@@ -148,6 +148,10 @@
     async launchUnityEditor(editorPath) {
       return { ok: true, message: `Demo: would launch ${editorPath}` };
     },
+    async browseTo(targetPath) {
+      if (!targetPath) return { ok: false, message: "Path is required." };
+      return { ok: true, message: `Demo: would browse to ${targetPath}` };
+    },
     async pickDirectory() {
       return window.prompt("Mock folder path", "D:/repos/new-project") || "";
     },

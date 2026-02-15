@@ -1,6 +1,6 @@
-﻿import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ProjectEntry, UnityInstall, VcsStatus } from "./types";
@@ -541,6 +541,28 @@ function launchUnityEditor(editorPath: string): { ok: boolean; message: string }
   }
 }
 
+function browseToPath(targetPath: string): { ok: boolean; message: string } {
+  const value = targetPath.trim();
+  if (!value) {
+    return { ok: false, message: "Path is required." };
+  }
+  if (!existsSync(value)) {
+    return { ok: false, message: "Path does not exist." };
+  }
+
+  try {
+    const info = statSync(value);
+    if (info.isDirectory()) {
+      void shell.openPath(value);
+      return { ok: true, message: "Opened folder in file explorer." };
+    }
+    shell.showItemInFolder(value);
+    return { ok: true, message: "Revealed item in file explorer." };
+  } catch (error) {
+    return { ok: false, message: `Failed to browse path: ${String(error)}` };
+  }
+}
+
 function cloneRepository(repoUrl: string, targetDir: string, branch: string): { ok: boolean; message: string } {
   if (!repoUrl.trim()) {
     return { ok: false, message: "Repository URL is required." };
@@ -690,6 +712,7 @@ app.whenReady().then(() => {
     return result;
   });
   ipcMain.handle("unity:launchEditor", (_event, editorPath: string) => launchUnityEditor(editorPath));
+  ipcMain.handle("path:browseTo", (_event, targetPath: string) => browseToPath(targetPath));
   ipcMain.handle("dialog:pickDirectory", async () => {
     const result = await dialog.showOpenDialog({
       properties: ["openDirectory"],
@@ -730,3 +753,4 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+

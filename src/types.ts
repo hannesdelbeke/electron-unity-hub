@@ -41,6 +41,7 @@ declare global {
         resolvedUnityExe?: string;
       }>;
       launchUnityEditor: (editorPath: string) => Promise<{ ok: boolean; message: string }>;
+      browseTo: (targetPath: string) => Promise<{ ok: boolean; message: string }>;
       pickDirectory: () => Promise<string>;
       pickFile: () => Promise<string>;
       cloneRepo: (repoUrl: string, targetDir: string, branch: string) => Promise<{ ok: boolean; message: string }>;
