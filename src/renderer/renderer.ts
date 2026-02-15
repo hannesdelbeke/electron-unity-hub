@@ -707,11 +707,21 @@ async function refreshProjectInfoForId(id: string, updateStatus = true): Promise
     }
     return;
   }
-  const row = await withActivity("Updating project info...", () => buildProjectTableRow(project));
+  let effectiveProject = project;
+  if (project.path.trim().length > 0) {
+    const detectedVersion = await window.launcherApi.detectUnityVersion(project.path);
+    if (detectedVersion && detectedVersion !== project.unityVersion) {
+      const updatedProject: ProjectEntry = { ...project, unityVersion: detectedVersion };
+      await saveProject(updatedProject);
+      effectiveProject = projects.find((item) => item.id === id) ?? updatedProject;
+    }
+  }
+
+  const row = await withActivity("Updating project info...", () => buildProjectTableRow(effectiveProject));
   projectRowCache.set(project.id, row);
   await renderProjectsTable();
   if (updateStatus) {
-    setStatus(`Updated ${getDisplayName(project)}`, "success", 2500);
+    setStatus(`Updated ${getDisplayName(effectiveProject)}`, "success", 2500);
   }
 }
 
@@ -1186,8 +1196,33 @@ function renderInstallsTable(): void {
 }
 
 async function refreshProjects(updateStatus = true): Promise<void> {
-  const [localProjects, remoteCloudProjects, detectedInstalls] = await Promise.all([
-    window.launcherApi.getProjects(),
+  let localProjects = await window.launcherApi.getProjects();
+  if (updateStatus) {
+    let changedCount = 0;
+    const scannedProjects = await withActivity("Refreshing Unity versions...", async () => {
+      const updated = [...localProjects];
+      for (let i = 0; i < updated.length; i += 1) {
+        const project = updated[i];
+        if (!project.path.trim()) {
+          continue;
+        }
+        const detectedVersion = await window.launcherApi.detectUnityVersion(project.path);
+        if (detectedVersion && detectedVersion !== project.unityVersion) {
+          const nextProject = { ...project, unityVersion: detectedVersion };
+          await window.launcherApi.saveProject(nextProject);
+          updated[i] = nextProject;
+          changedCount += 1;
+        }
+      }
+      return updated;
+    });
+    localProjects = scannedProjects;
+    if (changedCount > 0) {
+      localProjects = await window.launcherApi.getProjects();
+    }
+  }
+
+  const [remoteCloudProjects, detectedInstalls] = await Promise.all([
     window.launcherApi.getCloudProjects(),
     window.launcherApi.getUnityInstalls(),
   ]);
