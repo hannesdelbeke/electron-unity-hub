@@ -1,10 +1,10 @@
 # Unity Launcher - Electron
 A more minimalistic Unity project launcher, that integrates with Git & Perforce.  
+You can [test a demo in your browser](https://hannesdelbeke.github.io/electron-unity-hub/).
 
 ## Preview
 
 ![Launcher Preview](./preview/launcher-preview.svg)
-[Test it in your browser](https://hannesdelbeke.github.io/electron-unity-hub/) with mock data.
 
 ## Download
 Download the launcher from the releases on the right side.  
