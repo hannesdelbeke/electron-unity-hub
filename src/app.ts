@@ -1,5 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, shell } from "electron";
-import { spawn, spawnSync } from "node:child_process";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -22,21 +22,12 @@ function getDataFile(): string {
   return path.join(app.getPath("userData"), "projects.json");
 }
 
-function getGitHubAuthFile(): string {
-  return path.join(app.getPath("userData"), "github-auth.json");
-}
-
-type GitHubAuthStore = {
-  encrypted: boolean;
-  value: string;
-};
-
 type GitHubAuthStatus = {
   ghInstalled: boolean;
   ghAuthenticated: boolean;
   connected: boolean;
   login: string;
-  source: "gh" | "token" | "none";
+  source: "gh" | "none";
   installHint: string;
   installUrl: string;
   message: string;
@@ -121,59 +112,6 @@ function loadStore(): StoreShape {
 function saveStore(store: StoreShape): void {
   const dataFile = getDataFile();
   writeFileSync(dataFile, `${JSON.stringify(store, null, 2)}\n`, "utf-8");
-}
-
-function readGitHubToken(): string {
-  const authFile = getGitHubAuthFile();
-  if (!existsSync(authFile)) {
-    return "";
-  }
-  try {
-    const payload = JSON.parse(readFileSync(authFile, "utf-8")) as GitHubAuthStore;
-    if (!payload.value) {
-      return "";
-    }
-    if (!payload.encrypted) {
-      return payload.value;
-    }
-    if (!safeStorage.isEncryptionAvailable()) {
-      return "";
-    }
-    const decrypted = safeStorage.decryptString(Buffer.from(payload.value, "base64"));
-    return decrypted.trim();
-  } catch {
-    return "";
-  }
-}
-
-function writeGitHubToken(token: string): void {
-  const authFile = getGitHubAuthFile();
-  const trimmed = token.trim();
-  if (!trimmed) {
-    clearGitHubToken();
-    return;
-  }
-
-  let payload: GitHubAuthStore;
-  if (safeStorage.isEncryptionAvailable()) {
-    payload = {
-      encrypted: true,
-      value: safeStorage.encryptString(trimmed).toString("base64"),
-    };
-  } else {
-    payload = {
-      encrypted: false,
-      value: trimmed,
-    };
-  }
-  writeFileSync(authFile, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
-}
-
-function clearGitHubToken(): void {
-  const authFile = getGitHubAuthFile();
-  if (existsSync(authFile)) {
-    rmSync(authFile, { force: true });
-  }
 }
 
 function detectUnityVersion(projectPath: string): string {
@@ -465,7 +403,7 @@ function getProjectSizeBytes(projectPath: string): number {
   return bytes;
 }
 
-function getProjectLastCommitIso(projectPath: string): string {
+async function getProjectLastCommitIso(projectPath: string): Promise<string> {
   if (!existsSync(projectPath) || !isGitRepo(projectPath)) {
     return "";
   }
@@ -483,11 +421,7 @@ function getProjectLastCommitIso(projectPath: string): string {
     return cached.iso;
   }
 
-  const p = spawnSync("git", ["log", "-1", "--format=%cI", "--", "."], {
-    cwd: projectPath,
-    encoding: "utf-8",
-    timeout: 4000,
-  });
+  const p = await runWithResultTimeoutAsync("git", ["log", "-1", "--format=%cI", "--", "."], projectPath, 4000);
   const iso = p.status === 0 ? (p.stdout ?? "").trim() : "";
   projectLastCommitCache.set(cacheKey, { iso, computedAtMs: now, gitIndexMtimeMs });
   return iso;
@@ -773,6 +707,53 @@ function runWithResultTimeout(
   };
 }
 
+function runWithResultTimeoutAsync(
+  cmd: string,
+  args: string[],
+  cwd: string,
+  timeout: number,
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    execFile(
+      cmd,
+      args,
+      { cwd, encoding: "utf-8", timeout, maxBuffer: 32 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (!error) {
+          resolve({
+            status: 0,
+            stdout: (stdout ?? "").trim(),
+            stderr: (stderr ?? "").trim(),
+          });
+          return;
+        }
+        const code = typeof (error as NodeJS.ErrnoException & { code?: unknown }).code === "number"
+          ? ((error as NodeJS.ErrnoException & { code?: number }).code ?? null)
+          : null;
+        resolve({
+          status: code,
+          stdout: (stdout ?? "").trim(),
+          stderr: (stderr ?? "").trim(),
+        });
+      },
+    );
+  });
+}
+
+function compactMessage(input: string, fallback: string): string {
+  const lines = input
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !/^warning:\s+in the working copy/i.test(line));
+
+  const text = (lines.join(" | ") || fallback).replace(/\s+/g, " ").trim();
+  if (text.length <= 220) {
+    return text;
+  }
+  return `${text.slice(0, 217)}...`;
+}
+
 function getGhToken(): string {
   if (!commandExists("gh")) {
     return "";
@@ -796,14 +777,10 @@ async function getGhLogin(token: string): Promise<string> {
   }
 }
 
-function getEffectiveGitHubToken(): { token: string; source: "gh" | "token" | "none" } {
+function getEffectiveGitHubToken(): { token: string; source: "gh" | "none" } {
   const ghToken = getGhToken();
   if (ghToken) {
     return { token: ghToken, source: "gh" };
-  }
-  const storedToken = readGitHubToken();
-  if (storedToken) {
-    return { token: storedToken, source: "token" };
   }
   return { token: "", source: "none" };
 }
@@ -1013,7 +990,7 @@ async function getGitHubAuthStatus(): Promise<GitHubAuthStatus> {
       source,
       installHint,
       installUrl,
-      message: source === "gh" ? "Connected via GitHub CLI" : "Connected via saved token",
+      message: "Connected via GitHub CLI",
     };
   } catch (error) {
     return {
@@ -1024,7 +1001,7 @@ async function getGitHubAuthStatus(): Promise<GitHubAuthStatus> {
       source: "none",
       installHint,
       installUrl,
-      message: `Token invalid: ${String(error)}`,
+      message: `GitHub auth invalid: ${String(error)}`,
     };
   }
 }
@@ -1049,8 +1026,8 @@ function isGitRepo(projectPath: string): boolean {
   return run("git", ["rev-parse", "--is-inside-work-tree"], projectPath) === "true";
 }
 
-function gitStatus(projectPath: string): VcsStatus {
-  const statusResult = runWithResult("git", ["status", "--porcelain=v1", "--branch"], projectPath);
+async function gitStatus(projectPath: string): Promise<VcsStatus> {
+  const statusResult = await runWithResultTimeoutAsync("git", ["status", "--porcelain=v1", "--branch"], projectPath, 5000);
   if (statusResult.status !== 0) {
     const err = statusResult.stderr.toLowerCase();
     const blocked = err.includes("dubious ownership");
@@ -1079,7 +1056,11 @@ function gitStatus(projectPath: string): VcsStatus {
 
   let incomingCount = 0;
   let outgoingCount = 0;
-  const aheadBehind = run("git", ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"], projectPath);
+  const [aheadBehindResult, branchResult] = await Promise.all([
+    runWithResultTimeoutAsync("git", ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"], projectPath, 4000),
+    runWithResultTimeoutAsync("git", ["rev-parse", "--abbrev-ref", "HEAD"], projectPath, 4000),
+  ]);
+  const aheadBehind = aheadBehindResult.status === 0 ? aheadBehindResult.stdout : "";
   if (aheadBehind) {
     const parts = aheadBehind.split(/\s+/).map((value) => Number.parseInt(value, 10));
     if (parts.length >= 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
@@ -1088,7 +1069,7 @@ function gitStatus(projectPath: string): VcsStatus {
     }
   }
 
-  const branch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], projectPath) || "unknown";
+  const branch = (branchResult.status === 0 ? branchResult.stdout : "") || "unknown";
   const state = conflictCount > 0 ? "conflict" : localChangesCount > 0 ? "dirty" : "clean";
   return {
     kind: "Git",
@@ -1230,12 +1211,12 @@ function plasticStatus(projectPath: string): VcsStatus {
   };
 }
 
-function getVcsStatus(projectPath: string): VcsStatus {
+async function getVcsStatus(projectPath: string): Promise<VcsStatus> {
   if (!existsSync(projectPath)) {
     return emptyVcsStatus("None", "", "missing path");
   }
   if (isGitRepo(projectPath)) {
-    return gitStatus(projectPath);
+    return await gitStatus(projectPath);
   }
   if (isPerforce(projectPath)) {
     return perforceStatus(projectPath);
@@ -1249,7 +1230,7 @@ function getVcsStatus(projectPath: string): VcsStatus {
   return emptyVcsStatus("None", "", "not detected");
 }
 
-function gitCommitAndPush(projectPath: string): { ok: boolean; message: string; conflict?: boolean } {
+async function gitCommitAndPush(projectPath: string): Promise<{ ok: boolean; message: string; conflict?: boolean }> {
   if (!projectPath.trim() || !existsSync(projectPath)) {
     return { ok: false, message: "Project path is missing." };
   }
@@ -1257,24 +1238,26 @@ function gitCommitAndPush(projectPath: string): { ok: boolean; message: string; 
     return { ok: false, message: "Commit & Push supports git projects only." };
   }
 
-  const addRes = runWithResultTimeout("git", ["add", "-A"], projectPath, 60_000);
+  const addRes = await runWithResultTimeoutAsync("git", ["add", "-A"], projectPath, 60_000);
   if (addRes.status !== 0) {
-    return { ok: false, message: addRes.stderr || "Failed to stage changes." };
+    const combined = `${addRes.stderr}\n${addRes.stdout}`;
+    return { ok: false, message: compactMessage(combined, "Failed to stage changes. Close Unity and try again.") };
   }
 
-  const diffRes = runWithResultTimeout("git", ["diff", "--cached", "--quiet"], projectPath, 10_000);
+  const diffRes = await runWithResultTimeoutAsync("git", ["diff", "--cached", "--quiet"], projectPath, 10_000);
   if (diffRes.status === 0) {
     return { ok: true, message: "Nothing to commit." };
   }
 
   const stamp = new Date().toISOString().replace("T", " ").slice(0, 16);
   const commitMessage = `Update from Electron Unity Hub (${stamp} UTC)`;
-  const commitRes = runWithResultTimeout("git", ["commit", "-m", commitMessage], projectPath, 60_000);
+  const commitRes = await runWithResultTimeoutAsync("git", ["commit", "-m", commitMessage], projectPath, 60_000);
   if (commitRes.status !== 0) {
-    return { ok: false, message: commitRes.stderr || commitRes.stdout || "Commit failed." };
+    const combined = `${commitRes.stderr}\n${commitRes.stdout}`;
+    return { ok: false, message: compactMessage(combined, "Commit failed.") };
   }
 
-  const pushRes = runWithResultTimeout("git", ["push"], projectPath, 90_000);
+  const pushRes = await runWithResultTimeoutAsync("git", ["push"], projectPath, 90_000);
   if (pushRes.status === 0) {
     return { ok: true, message: "Committed and pushed changes." };
   }
@@ -1284,7 +1267,7 @@ function gitCommitAndPush(projectPath: string): { ok: boolean; message: string; 
     || pushErr.includes("fetch first")
     || pushErr.includes("rejected");
   if (outOfDate) {
-    const pullRebaseRes = runWithResultTimeout("git", ["pull", "--rebase", "--autostash"], projectPath, 120_000);
+    const pullRebaseRes = await runWithResultTimeoutAsync("git", ["pull", "--rebase", "--autostash"], projectPath, 120_000);
     if (pullRebaseRes.status !== 0) {
       const rebaseOutput = `${pullRebaseRes.stderr}\n${pullRebaseRes.stdout}`.toLowerCase();
       const hasConflict = rebaseOutput.includes("conflict") || rebaseOutput.includes("could not apply");
@@ -1295,29 +1278,29 @@ function gitCommitAndPush(projectPath: string): { ok: boolean; message: string; 
           conflict: true,
         };
       }
-      return { ok: false, message: pullRebaseRes.stderr || pullRebaseRes.stdout || "Pull/rebase failed before push." };
+      return { ok: false, message: compactMessage(`${pullRebaseRes.stderr}\n${pullRebaseRes.stdout}`, "Pull/rebase failed before push.") };
     }
 
-    const pushAfterRebaseRes = runWithResultTimeout("git", ["push"], projectPath, 90_000);
+    const pushAfterRebaseRes = await runWithResultTimeoutAsync("git", ["push"], projectPath, 90_000);
     if (pushAfterRebaseRes.status === 0) {
       return { ok: true, message: "Committed, synced latest changes, and pushed." };
     }
-    return { ok: false, message: pushAfterRebaseRes.stderr || pushAfterRebaseRes.stdout || "Push failed after sync." };
+    return { ok: false, message: compactMessage(`${pushAfterRebaseRes.stderr}\n${pushAfterRebaseRes.stdout}`, "Push failed after sync.") };
   }
 
   const branch = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], projectPath) || "";
   if (branch && branch !== "HEAD") {
-    const upstreamPush = runWithResultTimeout("git", ["push", "-u", "origin", branch], projectPath, 90_000);
+    const upstreamPush = await runWithResultTimeoutAsync("git", ["push", "-u", "origin", branch], projectPath, 90_000);
     if (upstreamPush.status === 0) {
       return { ok: true, message: "Committed and pushed changes." };
     }
-      return { ok: false, message: upstreamPush.stderr || pushRes.stderr || "Push failed." };
+      return { ok: false, message: compactMessage(`${upstreamPush.stderr}\n${pushRes.stderr}`, "Push failed.") };
   }
 
-  return { ok: false, message: pushRes.stderr || "Push failed. Branch has no upstream." };
+  return { ok: false, message: compactMessage(`${pushRes.stderr}\n${pushRes.stdout}`, "Push failed. Branch has no upstream.") };
 }
 
-function gitPull(projectPath: string): { ok: boolean; message: string } {
+async function gitPull(projectPath: string): Promise<{ ok: boolean; message: string }> {
   if (!projectPath.trim() || !existsSync(projectPath)) {
     return { ok: false, message: "Project path is missing." };
   }
@@ -1325,16 +1308,16 @@ function gitPull(projectPath: string): { ok: boolean; message: string } {
     return { ok: false, message: "Pull supports git projects only." };
   }
 
-  const fetchRes = runWithResultTimeout("git", ["fetch", "--prune"], projectPath, 90_000);
+  const fetchRes = await runWithResultTimeoutAsync("git", ["fetch", "--prune"], projectPath, 90_000);
   if (fetchRes.status !== 0) {
-    return { ok: false, message: fetchRes.stderr || "Fetch failed." };
+    return { ok: false, message: compactMessage(`${fetchRes.stderr}\n${fetchRes.stdout}`, "Fetch failed.") };
   }
 
-  const pullRes = runWithResultTimeout("git", ["pull", "--ff-only"], projectPath, 90_000);
+  const pullRes = await runWithResultTimeoutAsync("git", ["pull", "--ff-only"], projectPath, 90_000);
   if (pullRes.status !== 0) {
     return {
       ok: false,
-      message: pullRes.stderr || pullRes.stdout || "Pull failed. Resolve divergence manually.",
+      message: compactMessage(`${pullRes.stderr}\n${pullRes.stdout}`, "Pull failed. Resolve divergence manually."),
     };
   }
   if ((pullRes.stdout || "").toLowerCase().includes("already up to date")) {
@@ -1649,7 +1632,7 @@ function browseToPath(targetPath: string): { ok: boolean; message: string } {
   }
 }
 
-function cloneRepository(repoUrl: string, targetDir: string, branch: string): { ok: boolean; message: string } {
+async function cloneRepository(repoUrl: string, targetDir: string, branch: string): Promise<{ ok: boolean; message: string }> {
   if (!repoUrl.trim()) {
     return { ok: false, message: "Repository URL is required." };
   }
@@ -1663,12 +1646,50 @@ function cloneRepository(repoUrl: string, targetDir: string, branch: string): { 
   }
   args.push(repoUrl.trim(), targetDir.trim());
 
-  const p = spawnSync("git", args, { encoding: "utf-8", timeout: 120000 });
-  if (p.status === 0) {
-    return { ok: true, message: "Repository cloned." };
-  }
-  const stderr = (p.stderr ?? "").trim();
-  return { ok: false, message: stderr || "Failed to clone repository." };
+  return await new Promise((resolve) => {
+    const child = spawn("git", args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stderr = "";
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      try {
+        child.kill();
+      } catch {
+        // Ignore process termination errors.
+      }
+      resolve({ ok: false, message: "Clone timed out after 2 minutes." });
+    }, 120_000);
+
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk ?? "");
+    });
+
+    child.on("error", (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      resolve({ ok: false, message: `Failed to run git clone: ${String(error)}` });
+    });
+
+    child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      if (code === 0) {
+        resolve({ ok: true, message: "Repository cloned." });
+        return;
+      }
+      resolve({ ok: false, message: stderr.trim() || "Failed to clone repository." });
+    });
+  });
 }
 
 function upsertProject(incoming: ProjectEntry): ProjectEntry[] {
@@ -1904,7 +1925,7 @@ function inferRepoFolderName(project: ProjectEntry): string {
   return fromName.replace(/[<>:"/\\|?*]+/g, "_");
 }
 
-function cloneCloudProject(projectId: string, parentDir: string): { ok: boolean; message: string; projects: ProjectEntry[] } {
+async function cloneCloudProject(projectId: string, targetDir: string): Promise<{ ok: boolean; message: string; projects: ProjectEntry[] }> {
   const store = loadStore();
   const cloudProjects = store.meta.cloudProjects ?? [];
   const cloudProject = cloudProjects.find((item) => item.id === projectId);
@@ -1914,16 +1935,16 @@ function cloneCloudProject(projectId: string, parentDir: string): { ok: boolean;
   if (!cloudProject.cloneUrl?.trim()) {
     return { ok: false, message: "Cloud project clone URL is missing.", projects: store.projects };
   }
-  if (!parentDir.trim()) {
+  const targetPath = targetDir.trim();
+  if (!targetPath) {
     return { ok: false, message: "Target folder is required.", projects: store.projects };
   }
 
-  const targetDir = path.join(parentDir, inferRepoFolderName(cloudProject));
-  if (existsSync(targetDir)) {
+  if (existsSync(targetPath)) {
     return { ok: false, message: "Target folder already exists.", projects: store.projects };
   }
 
-  const cloneResult = cloneRepository(cloudProject.cloneUrl, targetDir, "");
+  const cloneResult = await cloneRepository(cloudProject.cloneUrl, targetPath, "");
   if (!cloneResult.ok) {
     return { ok: false, message: cloneResult.message, projects: store.projects };
   }
@@ -1932,8 +1953,8 @@ function cloneCloudProject(projectId: string, parentDir: string): { ok: boolean;
     id: randomUUID(),
     nickname: cloudProject.nickname,
     name: cloudProject.name || inferRepoFolderName(cloudProject),
-    path: targetDir,
-    unityVersion: cloudProject.unityVersion || detectUnityVersion(targetDir),
+    path: targetPath,
+    unityVersion: cloudProject.unityVersion || detectUnityVersion(targetPath),
     unityExe: "",
     lastOpenedIso: "",
     cloudRepo: cloudProject.cloudRepo ?? "",
@@ -2015,7 +2036,7 @@ app.whenReady().then(() => {
   ipcMain.handle("projects:save", (_event, project: ProjectEntry) => upsertProject(project));
   ipcMain.handle("projects:delete", (_event, id: string) => deleteProject(id));
   ipcMain.handle("projects:deleteCloud", (_event, id: string) => removeCloudProjectById(id));
-  ipcMain.handle("projects:cloneCloud", (_event, projectId: string, parentDir: string) => cloneCloudProject(projectId, parentDir));
+  ipcMain.handle("projects:cloneCloud", async (_event, projectId: string, targetDir: string) => cloneCloudProject(projectId, targetDir));
   ipcMain.handle("projects:removeMissing", () => removeMissingProjects());
   ipcMain.handle("projects:syncFromUnityHub", () => syncProjectsFromUnityHub());
   ipcMain.handle("settings:get", () => {
@@ -2033,9 +2054,9 @@ app.whenReady().then(() => {
   ipcMain.handle("unity:detectVersion", (_event, projectPath: string) => detectUnityVersion(projectPath));
   ipcMain.handle("unity:projectIcon", (_event, projectPath: string) => detectProjectIconDataUrl(projectPath));
   ipcMain.handle("project:remoteUrl", (_event, projectPath: string) => getProjectRemoteUrl(projectPath));
-  ipcMain.handle("project:lastCommitIso", (_event, projectPath: string) => getProjectLastCommitIso(projectPath));
+  ipcMain.handle("project:lastCommitIso", async (_event, projectPath: string) => getProjectLastCommitIso(projectPath));
   ipcMain.handle("project:sizeBytes", (_event, projectPath: string) => getProjectSizeBytes(projectPath));
-  ipcMain.handle("vcs:status", (_event, projectPath: string) => getVcsStatus(projectPath));
+  ipcMain.handle("vcs:status", async (_event, projectPath: string) => getVcsStatus(projectPath));
   ipcMain.handle("vcs:gitCommitPush", (_event, projectPath: string) => gitCommitAndPush(projectPath));
   ipcMain.handle("vcs:gitPull", (_event, projectPath: string) => gitPull(projectPath));
   ipcMain.handle("project:isOpen", (_event, projectPath: string) => projectIsOpen(projectPath));
@@ -2064,6 +2085,21 @@ app.whenReady().then(() => {
     }
     return result.filePaths[0];
   });
+  ipcMain.handle("dialog:pickCloneTarget", async (_event, defaultParentDir: string, suggestedFolderName: string) => {
+    const safeFolder = (suggestedFolderName || "project").replace(/[<>:"/\\|?*]+/g, "_");
+    const baseDir = defaultParentDir?.trim() ? defaultParentDir.trim() : app.getPath("documents");
+    const defaultPath = path.join(baseDir, safeFolder);
+    const result = await dialog.showSaveDialog({
+      title: "Choose clone target folder",
+      buttonLabel: "Select Folder",
+      defaultPath,
+      properties: ["createDirectory", "showOverwriteConfirmation"],
+    });
+    if (result.canceled || !result.filePath) {
+      return "";
+    }
+    return result.filePath;
+  });
   ipcMain.handle("dialog:pickFile", async () => {
     const result = await dialog.showOpenDialog({
       properties: ["openFile"],
@@ -2077,31 +2113,18 @@ app.whenReady().then(() => {
     }
     return result.filePaths[0];
   });
-  ipcMain.handle("repo:clone", (_event, repoUrl: string, targetDir: string, branch: string) =>
+  ipcMain.handle("repo:clone", async (_event, repoUrl: string, targetDir: string, branch: string) =>
     cloneRepository(repoUrl, targetDir, branch),
   );
   ipcMain.handle("github:getAuthStatus", async () => getGitHubAuthStatus());
-  ipcMain.handle("github:setToken", async (_event, token: string) => {
-    const trimmed = token.trim();
-    if (!trimmed) {
-      return { ok: false, message: "Token is required." };
-    }
-    try {
-      const user = await githubRequest<GitHubUser>(trimmed, "/user");
-      writeGitHubToken(trimmed);
-      return { ok: true, message: `Connected as ${user.login}.` };
-    } catch (error) {
-      return { ok: false, message: `GitHub authentication failed: ${String(error)}` };
-    }
-  });
-  ipcMain.handle("github:clearToken", () => {
-    clearGitHubToken();
-    return { ok: true };
-  });
   ipcMain.handle("github:discoverCloudProjects", async () => {
     const { token } = getEffectiveGitHubToken();
     if (!token) {
-      return { ok: false, message: "GitHub is not connected.", projects: [] as ProjectEntry[] };
+      return {
+        ok: false,
+        message: "GitHub CLI auth is required. Run `gh auth login` first.",
+        projects: [] as ProjectEntry[],
+      };
     }
     try {
       const cloud = await discoverUnityCloudProjects(token);
