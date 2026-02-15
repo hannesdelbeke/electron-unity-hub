@@ -7,30 +7,33 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <main class="shell">
-    <aside class="sidebar">
-      <div class="sidebar-brand">
-        <img class="sidebar-brand-icon" src="./assets/unityhub.png" alt="Unity Hub" />
-        <span class="sidebar-brand-title">Hub</span>
-      </div>
-      <button id="tab-projects" class="side-tab active">
-        <span class="tab-icon">PR</span>
-        <span class="tab-label">Projects</span>
-      </button>
-      <button id="tab-installs" class="side-tab">
-        <span class="tab-icon">UI</span>
-        <span class="tab-label">Unity Installs</span>
-      </button>
-      <div class="side-spacer"></div>
-      <button id="tab-settings" class="side-tab">
-        <span class="tab-icon">ST</span>
-        <span class="tab-label">Settings</span>
-      </button>
-    </aside>
+  <div class="app-root">
+    <header class="window-bar"></header>
 
-    <section class="content">
-      <section class="topbar-host">
-        <section id="topbar-projects" class="toolbar topbar active">
+    <main class="workspace">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <img class="sidebar-brand-icon" src="./assets/unityhub.png" alt="Unity Hub" />
+          <span class="sidebar-brand-title">Hub</span>
+        </div>
+        <button id="tab-projects" class="side-tab active">
+          <span class="tab-icon">PR</span>
+          <span class="tab-label">Projects</span>
+        </button>
+        <button id="tab-installs" class="side-tab">
+          <span class="tab-icon">UI</span>
+          <span class="tab-label">Unity Installs</span>
+        </button>
+        <div class="side-spacer"></div>
+        <button id="tab-settings" class="side-tab">
+          <span class="tab-icon">ST</span>
+          <span class="tab-label">Settings</span>
+        </button>
+      </aside>
+
+      <section class="panel-host">
+        <section id="view-projects" class="view active">
+          <section id="topbar-projects" class="toolbar panel-topbar">
           <h1>Projects</h1>
           <input id="search" type="search" placeholder="Search projects" />
           <div class="add-wrap">
@@ -44,20 +47,6 @@
           <button id="refresh-btn" class="icon-btn topbar-refresh-btn" type="button" aria-label="Refresh projects" title="Refresh projects">↻</button>
         </section>
 
-        <section id="topbar-installs" class="toolbar topbar">
-          <h1>Unity Installs</h1>
-          <div class="topbar-spacer"></div>
-          <button id="refresh-installs" class="icon-btn topbar-refresh-btn" type="button" aria-label="Refresh installs" title="Refresh installs">↻</button>
-        </section>
-
-        <section id="topbar-settings" class="toolbar topbar">
-          <h1>Settings</h1>
-          <div class="topbar-spacer"></div>
-        </section>
-      </section>
-
-      <section class="view-host">
-      <section id="view-projects" class="view active">
         <section class="projects-panel">
           <table id="projects-table">
             <thead>
@@ -81,6 +70,12 @@
       </section>
 
       <section id="view-installs" class="view">
+        <section id="topbar-installs" class="toolbar panel-topbar">
+          <h1>Unity Installs</h1>
+          <div class="topbar-spacer"></div>
+          <button id="refresh-installs" class="icon-btn topbar-refresh-btn" type="button" aria-label="Refresh installs" title="Refresh installs">↻</button>
+        </section>
+
         <section class="projects-panel">
           <table id="installs-table">
             <thead>
@@ -102,26 +97,35 @@
       </section>
 
       <section id="view-settings" class="view">
+        <section id="topbar-settings" class="toolbar panel-topbar">
+          <h1>Settings</h1>
+          <div class="topbar-spacer"></div>
+        </section>
         <section class="settings-panel">
-          <label>Default Unity executable
+          <div class="settings-row">
+            <label for="settings-default-unity-exe">Default Unity executable</label>
             <div class="input-row">
               <input id="settings-default-unity-exe" type="text" placeholder="Optional" />
               <button id="settings-browse-exe" type="button" class="btn">Browse</button>
             </div>
-          </label>
+          </div>
 
-          <label>Theme
+          <div class="settings-row">
+            <label for="settings-theme">Theme</label>
             <select id="settings-theme" class="theme-select">
               <option value="system">Match System</option>
               <option value="dark">Dark</option>
               <option value="light">Light</option>
             </select>
-          </label>
+          </div>
 
-          <label class="checkbox-row">
-            <input id="settings-disable-render-throttling" type="checkbox" />
-            <span>Disable render throttling (smoother resize, higher CPU usage)</span>
-          </label>
+          <div class="settings-row">
+            <label for="settings-disable-render-throttling">Render throttling</label>
+            <label class="checkbox-row" for="settings-disable-render-throttling">
+              <input id="settings-disable-render-throttling" type="checkbox" />
+              <span>Disable (smoother resize, higher CPU usage)</span>
+            </label>
+          </div>
 
           <div class="settings-actions">
             <button id="settings-save" class="btn accent">Save Settings</button>
@@ -134,8 +138,8 @@
         </section>
       </section>
       </section>
-    </section>
-  </main>
+    </main>
+  </div>
 
   <dialog id="disk-dialog" class="modal">
     <form method="dialog" id="disk-form" class="modal-form">

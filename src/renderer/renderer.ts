@@ -30,6 +30,7 @@ type ProjectTableRow = {
   project: ProjectEntry;
   vcs: VcsStatus;
   isMissing: boolean;
+  iconDataUrl: string;
 };
 
 const tbody = document.querySelector<HTMLTableSectionElement>("#projects-table tbody");
@@ -66,9 +67,6 @@ const tabSettings = document.getElementById("tab-settings");
 const viewProjects = document.getElementById("view-projects");
 const viewInstalls = document.getElementById("view-installs");
 const viewSettings = document.getElementById("view-settings");
-const topbarProjects = document.getElementById("topbar-projects");
-const topbarInstalls = document.getElementById("topbar-installs");
-const topbarSettings = document.getElementById("topbar-settings");
 
 let projects: ProjectEntry[] = [];
 let installs: UnityInstall[] = [];
@@ -111,10 +109,6 @@ function activateTab(tab: TabName): void {
   viewProjects?.classList.toggle("active", tab === "projects");
   viewInstalls?.classList.toggle("active", tab === "installs");
   viewSettings?.classList.toggle("active", tab === "settings");
-
-  topbarProjects?.classList.toggle("active", tab === "projects");
-  topbarInstalls?.classList.toggle("active", tab === "installs");
-  topbarSettings?.classList.toggle("active", tab === "settings");
 }
 
 function formatVcs(vcs: VcsStatus): string {
@@ -134,6 +128,20 @@ function formatLastOpened(iso: string): string {
 
 function warningLabel(missing: boolean): string {
   return missing ? "<span class=\"warning-pill\">Missing</span>" : "";
+}
+
+function createCellContent(value: string, asHtml = false): HTMLDivElement {
+  const content = document.createElement("div");
+  content.className = "cell-content";
+  if (asHtml) {
+    content.innerHTML = value;
+  } else {
+    const text = document.createElement("span");
+    text.className = "cell-text";
+    text.textContent = value;
+    content.appendChild(text);
+  }
+  return content;
 }
 
 function compareValues(left: string | number | boolean, right: string | number | boolean): number {
@@ -301,11 +309,15 @@ async function renderProjectsTable(): Promise<void> {
   const visible = getFilteredProjects();
   const rows: ProjectTableRow[] = await Promise.all(
     visible.map(async (project) => {
-      const vcs = await window.launcherApi.getVcsStatus(project.path);
+      const [vcs, iconDataUrl] = await Promise.all([
+        window.launcherApi.getVcsStatus(project.path),
+        window.launcherApi.getProjectIcon(project.path),
+      ]);
       return {
         project,
         vcs,
         isMissing: vcs.state === "missing path",
+        iconDataUrl,
       };
     }),
   );
@@ -368,7 +380,6 @@ async function renderProjectsTable(): Promise<void> {
     const isMissing = row.isMissing;
 
     const values: Array<string> = [
-      getDisplayName(project),
       project.path,
       project.unityVersion,
       formatVcs(vcs),
@@ -376,13 +387,24 @@ async function renderProjectsTable(): Promise<void> {
       warningLabel(isMissing),
     ];
 
+    const projectCell = document.createElement("td");
+    const projectContent = document.createElement("div");
+    projectContent.className = "cell-content cell-with-icon";
+    const icon = document.createElement("img");
+    icon.className = "project-icon";
+    icon.alt = "";
+    icon.src = row.iconDataUrl || "./assets/unityhub.png";
+    const label = document.createElement("span");
+    label.className = "cell-text";
+    label.textContent = getDisplayName(project);
+    projectContent.appendChild(icon);
+    projectContent.appendChild(label);
+    projectCell.appendChild(projectContent);
+    tr.appendChild(projectCell);
+
     for (let i = 0; i < values.length; i += 1) {
       const td = document.createElement("td");
-      if (i === values.length - 1) {
-        td.innerHTML = values[i];
-      } else {
-        td.textContent = values[i];
-      }
+      td.appendChild(createCellContent(values[i], i === values.length - 1));
       tr.appendChild(td);
     }
 
@@ -491,21 +513,69 @@ function renderInstallsTable(): void {
     tr.classList.add("clickable");
 
     const values: Array<string> = [
-      install.version,
       install.path,
       install.source,
       warningLabel(!install.exists),
     ];
 
+    const versionTd = document.createElement("td");
+    const versionContent = document.createElement("div");
+    versionContent.className = "cell-content cell-with-icon";
+    const versionIcon = document.createElement("img");
+    versionIcon.className = "project-icon";
+    versionIcon.alt = "";
+    versionIcon.src = "./assets/unityhub.png";
+    const versionText = document.createElement("span");
+    versionText.className = "cell-text";
+    versionText.textContent = install.version;
+    versionContent.appendChild(versionIcon);
+    versionContent.appendChild(versionText);
+    versionTd.appendChild(versionContent);
+    tr.appendChild(versionTd);
+
     for (let i = 0; i < values.length; i += 1) {
       const td = document.createElement("td");
-      if (i === values.length - 1) {
-        td.innerHTML = values[i];
-      } else {
-        td.textContent = values[i];
-      }
+      td.appendChild(createCellContent(values[i], i === values.length - 1));
       tr.appendChild(td);
     }
+
+    const actionsTd = document.createElement("td");
+    const actionsWrap = document.createElement("div");
+    actionsWrap.className = "row-actions install-row-actions";
+
+    const actionsButton = document.createElement("button");
+    actionsButton.className = "icon-btn row-action-btn";
+    actionsButton.type = "button";
+    actionsButton.textContent = "…";
+    actionsButton.setAttribute("aria-label", "Install actions");
+    actionsButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openInstallMenuPath = openInstallMenuPath === install.path ? "" : install.path;
+      renderInstallsTable();
+    });
+    actionsWrap.appendChild(actionsButton);
+
+    const rowMenu = document.createElement("div");
+    rowMenu.className = `menu row-menu${openInstallMenuPath === install.path ? "" : " hidden"}`;
+    rowMenu.addEventListener("click", (event) => event.stopPropagation());
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "menu-item danger-item";
+    removeBtn.type = "button";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      dismissInstallPath(install.path);
+      openInstallMenuPath = "";
+      installs = installs.filter((item) => item.path.toLowerCase() !== install.path.toLowerCase());
+      renderInstallsTable();
+      setStatus("Install removed");
+    });
+
+    rowMenu.appendChild(removeBtn);
+    actionsWrap.appendChild(rowMenu);
+    actionsTd.appendChild(actionsWrap);
+    tr.appendChild(actionsTd);
 
     tr.addEventListener("click", async () => {
       if (!install.exists) {
@@ -529,7 +599,9 @@ async function refreshProjects(updateStatus = true): Promise<void> {
 }
 
 async function refreshInstalls(updateStatus = true): Promise<void> {
-  installs = await window.launcherApi.getUnityInstalls();
+  const dismissed = loadDismissedInstallPaths();
+  const allInstalls = await window.launcherApi.getUnityInstalls();
+  installs = allInstalls.filter((install) => !dismissed.has(install.path.toLowerCase()));
   renderInstallsTable();
   if (updateStatus) {
     setStatus("Unity installs refreshed");
@@ -675,7 +747,12 @@ function wireGlobalEvents(): void {
     }
     if (!target.closest(".row-actions")) {
       closeProjectRowMenus();
-      void renderProjectsTable();
+      closeInstallRowMenus();
+      if (viewProjects?.classList.contains("active")) {
+        void renderProjectsTable();
+      } else if (viewInstalls?.classList.contains("active")) {
+        renderInstallsTable();
+      }
     }
   });
 

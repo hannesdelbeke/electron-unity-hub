@@ -31,6 +31,7 @@ declare global {
       getSettings: () => Promise<{ disableRenderThrottling: boolean }>;
       setDisableRenderThrottling: (value: boolean) => Promise<{ ok: boolean }>;
       detectUnityVersion: (projectPath: string) => Promise<string>;
+      getProjectIcon: (projectPath: string) => Promise<string>;
       getVcsStatus: (projectPath: string) => Promise<VcsStatus>;
       getUnityInstalls: () => Promise<UnityInstall[]>;
       launchOrFocus: (project: ProjectEntry) => Promise<{

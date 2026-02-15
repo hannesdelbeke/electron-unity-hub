@@ -58,6 +58,132 @@ function detectUnityVersion(projectPath: string): string {
   return line ? line.split(":", 2)[1].trim() : "";
 }
 
+const projectIconCache = new Map<string, string>();
+const guidPathCache = new Map<string, string>();
+
+function mimeFromExtension(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".png") return "image/png";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".bmp") return "image/bmp";
+  if (ext === ".svg") return "image/svg+xml";
+  return "application/octet-stream";
+}
+
+function toDataUrl(filePath: string): string {
+  if (!existsSync(filePath)) {
+    return "";
+  }
+  try {
+    const bytes = readFileSync(filePath);
+    return `data:${mimeFromExtension(filePath)};base64,${bytes.toString("base64")}`;
+  } catch {
+    return "";
+  }
+}
+
+function findAssetByGuid(assetsRoot: string, guid: string): string {
+  const guidKey = guid.toLowerCase();
+  const cached = guidPathCache.get(guidKey);
+  if (cached && existsSync(cached)) {
+    return cached;
+  }
+
+  const stack: string[] = [assetsRoot];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || !existsSync(current)) {
+      continue;
+    }
+
+    let entries: ReturnType<typeof readdirSync> | Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }> = [];
+    try {
+      entries = readdirSync(current, { withFileTypes: true }) as Array<{
+        name: string;
+        isDirectory: () => boolean;
+        isFile: () => boolean;
+      }>;
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith(".meta")) {
+        continue;
+      }
+      try {
+        const txt = readFileSync(fullPath, "utf-8");
+        if (!txt.includes(`guid: ${guid}`)) {
+          continue;
+        }
+        const assetPath = fullPath.slice(0, -".meta".length);
+        guidPathCache.set(guidKey, assetPath);
+        return assetPath;
+      } catch {
+        // Ignore unreadable meta file.
+      }
+    }
+  }
+  return "";
+}
+
+function detectProjectIconDataUrl(projectPath: string): string {
+  const cacheKey = normalizePath(projectPath);
+  if (projectIconCache.has(cacheKey)) {
+    return projectIconCache.get(cacheKey) ?? "";
+  }
+
+  const settingsPath = path.join(projectPath, "ProjectSettings", "ProjectSettings.asset");
+  if (!existsSync(settingsPath)) {
+    projectIconCache.set(cacheKey, "");
+    return "";
+  }
+
+  let settingsText = "";
+  try {
+    settingsText = readFileSync(settingsPath, "utf-8");
+  } catch {
+    projectIconCache.set(cacheKey, "");
+    return "";
+  }
+
+  const iconStart = settingsText.indexOf("m_BuildTargetIcons:");
+  const iconSection = iconStart >= 0 ? settingsText.slice(iconStart, iconStart + 100_000) : settingsText;
+  const guidMatches = [...iconSection.matchAll(/guid:\s*([0-9a-f]{32})/gi)];
+  if (guidMatches.length === 0) {
+    projectIconCache.set(cacheKey, "");
+    return "";
+  }
+
+  const assetsRoot = path.join(projectPath, "Assets");
+  for (const match of guidMatches) {
+    const guid = (match[1] ?? "").toLowerCase();
+    if (!guid) {
+      continue;
+    }
+    const assetPath = findAssetByGuid(assetsRoot, guid);
+    if (!assetPath) {
+      continue;
+    }
+    const iconDataUrl = toDataUrl(assetPath);
+    if (!iconDataUrl) {
+      continue;
+    }
+    projectIconCache.set(cacheKey, iconDataUrl);
+    return iconDataUrl;
+  }
+
+  projectIconCache.set(cacheKey, "");
+  return "";
+}
+
 function getHubCandidates(): string[] {
   const appData = app.getPath("appData");
   const candidates = [path.join(appData, "UnityHub")];
@@ -478,7 +604,7 @@ function removeMissingProjects(): { removed: number; remaining: number } {
 function createWindow(): void {
   const store = loadStore();
   const disableRenderThrottling = store.meta.disableRenderThrottling ?? true;
-  const bgColor = nativeTheme.shouldUseDarkColors ? "#111418" : "#f6f7f8";
+  const bgColor = nativeTheme.shouldUseDarkColors ? "#121212" : "#f4f4f4";
   const windowOptions: Electron.BrowserWindowConstructorOptions = {
     width: 1280,
     height: 760,
@@ -500,7 +626,7 @@ function createWindow(): void {
     if (process.platform === "win32") {
       windowOptions.titleBarOverlay = {
         color: bgColor,
-        symbolColor: nativeTheme.shouldUseDarkColors ? "#e7ecf3" : "#16181d",
+        symbolColor: nativeTheme.shouldUseDarkColors ? "#e8e8e8" : "#1b1b1b",
         height: 30,
       };
     }
@@ -543,6 +669,7 @@ app.whenReady().then(() => {
     return { ok: true };
   });
   ipcMain.handle("unity:detectVersion", (_event, projectPath: string) => detectUnityVersion(projectPath));
+  ipcMain.handle("unity:projectIcon", (_event, projectPath: string) => detectProjectIconDataUrl(projectPath));
   ipcMain.handle("vcs:status", (_event, projectPath: string) => getVcsStatus(projectPath));
   ipcMain.handle("unity:installs", () => getUnityInstalls());
   ipcMain.handle("unity:launchOrFocus", (_event, project: ProjectEntry) => {
