@@ -8,6 +8,10 @@ Project development instructions and architecture: [DEV.md](./DEV.md)
 
 Project TODOs are intentionally kept out of `DEV.md`. Use [TODO.md](./TODO.md) for task tracking.
 
+## Preview
+
+![Unity Launcher Preview](./preview/launcher-preview.svg)
+
 ## Implemented features
 
 - Left sidebar tabs: Projects, Unity Installs, Settings

@@ -88,7 +88,10 @@ let openInstallMenuPath = "";
 let editingProjectId = "";
 let didInit = false;
 let projectsRenderToken = 0;
-let statusActivityToken = 0;
+let activeStatusActivities = 0;
+let statusLoadingVisible = false;
+let statusLoadingRestoreText = "";
+let statusLoadingRestoreClassName = "";
 let projectSort: { key: ProjectSortKey; direction: SortDirection } = { key: "lastOpenedIso", direction: "desc" };
 let installSort: { key: InstallSortKey; direction: SortDirection } = { key: "version", direction: "asc" };
 
@@ -108,16 +111,21 @@ function setStatus(msg: string, tone: StatusTone = "success"): void {
 }
 
 async function withActivity<T>(message: string, task: () => Promise<T>): Promise<T> {
-  const token = ++statusActivityToken;
+  activeStatusActivities += 1;
   const previousText = statusEl?.textContent ?? "";
   const previousClassName = statusEl?.className ?? "";
   let shown = false;
+  let timerCompleted = false;
 
   const timer = setTimeout(() => {
-    if (token !== statusActivityToken) {
+    timerCompleted = true;
+    if (activeStatusActivities <= 0 || statusLoadingVisible) {
       return;
     }
     shown = true;
+    statusLoadingVisible = true;
+    statusLoadingRestoreText = previousText;
+    statusLoadingRestoreClassName = previousClassName;
     setStatus(message, "info");
     statusEl?.classList.add("status-loading");
   }, 300);
@@ -126,9 +134,17 @@ async function withActivity<T>(message: string, task: () => Promise<T>): Promise
     return await task();
   } finally {
     clearTimeout(timer);
-    if (statusEl && token === statusActivityToken && shown && statusEl.textContent === message && statusEl.classList.contains("status-loading")) {
-      statusEl.textContent = previousText;
-      statusEl.className = previousClassName;
+    if (!timerCompleted) {
+      shown = false;
+    }
+    activeStatusActivities = Math.max(0, activeStatusActivities - 1);
+    if (statusEl && shown && activeStatusActivities === 0 && statusEl.classList.contains("status-loading")) {
+      statusEl.textContent = statusLoadingRestoreText;
+      statusEl.className = statusLoadingRestoreClassName;
+      statusLoadingVisible = false;
+    }
+    if (activeStatusActivities === 0) {
+      statusLoadingVisible = false;
     }
   }
 }
