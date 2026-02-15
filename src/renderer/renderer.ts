@@ -92,6 +92,8 @@ let activeStatusActivities = 0;
 let statusLoadingVisible = false;
 let statusLoadingRestoreText = "";
 let statusLoadingRestoreClassName = "";
+let statusResetTimer: ReturnType<typeof setTimeout> | null = null;
+let statusSetToken = 0;
 let projectSort: { key: ProjectSortKey; direction: SortDirection } = { key: "lastOpenedIso", direction: "desc" };
 let installSort: { key: InstallSortKey; direction: SortDirection } = { key: "version", direction: "asc" };
 
@@ -102,11 +104,28 @@ const customInstallsKey = "unityLauncher.customInstalls";
 
 type TabName = "projects" | "installs" | "settings";
 
-function setStatus(msg: string, tone: StatusTone = "success"): void {
+function setStatus(msg: string, tone: StatusTone = "success", autoResetMs = 0): void {
+  statusSetToken += 1;
+  const tokenAtSet = statusSetToken;
+  if (statusResetTimer) {
+    clearTimeout(statusResetTimer);
+    statusResetTimer = null;
+  }
   if (statusEl) {
     statusEl.textContent = msg;
     statusEl.classList.remove("status-success", "status-warning", "status-error", "status-info", "status-loading");
     statusEl.classList.add(`status-${tone}`);
+    if (autoResetMs > 0) {
+      statusResetTimer = setTimeout(() => {
+        if (!statusEl || tokenAtSet !== statusSetToken) {
+          return;
+        }
+        statusEl.textContent = "Ready";
+        statusEl.classList.remove("status-success", "status-warning", "status-error", "status-info", "status-loading");
+        statusEl.classList.add("status-info");
+        statusResetTimer = null;
+      }, autoResetMs);
+    }
   }
 }
 
@@ -427,12 +446,14 @@ function dedupeProjects(input: ProjectEntry[]): ProjectEntry[] {
 
 async function launchProjectRow(project: ProjectEntry): Promise<void> {
   const result = await window.launcherApi.launchOrFocus(project);
-  if (/focus failed/i.test(result.message)) {
-    setStatus(result.message, "warning");
-  } else {
-    setStatus(result.message, result.ok ? "success" : "error");
-  }
+  const transientLaunchMessage =
+    /project already open|project appears open|focused existing unity window|attempting launch/i.test(result.message);
+  const tone: StatusTone = /focus failed/i.test(result.message)
+    ? "warning"
+    : (result.ok ? "success" : "error");
+  const autoResetMs = transientLaunchMessage ? 6000 : 0;
   await refreshProjects(false);
+  setStatus(result.message, tone, autoResetMs);
 }
 
 function openProjectSettings(project: ProjectEntry): void {
