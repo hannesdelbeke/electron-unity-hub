@@ -16,8 +16,8 @@
     </aside>
 
     <section class="content">
-      <section id="view-projects" class="view active">
-        <section class="toolbar">
+      <section class="topbar-host">
+        <section id="topbar-projects" class="toolbar topbar active">
           <h1>Projects</h1>
           <div class="projects-more-wrap">
             <button id="projects-more-toggle" class="icon-btn" aria-label="Project menu">...</button>
@@ -37,6 +37,25 @@
           <button id="new-project" class="btn accent">New Project</button>
         </section>
 
+        <section id="topbar-installs" class="toolbar topbar">
+          <h1>Unity Installs</h1>
+          <div></div>
+          <div></div>
+          <button id="refresh-installs" class="btn">Refresh Installs</button>
+          <div></div>
+        </section>
+
+        <section id="topbar-settings" class="toolbar topbar">
+          <h1>Settings</h1>
+          <div></div>
+          <div></div>
+          <div></div>
+          <div></div>
+        </section>
+      </section>
+
+      <section class="view-host">
+      <section id="view-projects" class="view active">
         <section class="projects-panel">
           <table id="projects-table">
             <thead>
@@ -47,6 +66,7 @@
                 <th class="sortable" data-sort="vcs" data-label="Source Control">Source Control</th>
                 <th class="sortable" data-sort="lastOpenedIso" data-label="Modified / Last Opened">Modified / Last Opened</th>
                 <th class="sortable" data-sort="status" data-label="Status">Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -61,11 +81,6 @@
       </section>
 
       <section id="view-installs" class="view">
-        <section class="toolbar installs-toolbar">
-          <h1>Unity Installs</h1>
-          <button id="refresh-installs" class="btn">Refresh Installs</button>
-        </section>
-
         <section class="projects-panel">
           <table id="installs-table">
             <thead>
@@ -86,10 +101,6 @@
       </section>
 
       <section id="view-settings" class="view">
-        <section class="toolbar installs-toolbar">
-          <h1>Settings</h1>
-        </section>
-
         <section class="settings-panel">
           <label>Default Unity executable
             <div class="input-row">
@@ -115,6 +126,7 @@
         <section class="footer-actions installs-footer">
           <span class="muted">Theme changes apply immediately after saving.</span>
         </section>
+      </section>
       </section>
     </section>
   </main>
@@ -171,6 +183,19 @@
       <menu>
         <button value="cancel" type="button" class="btn" onclick="this.closest('dialog')?.close()">Cancel</button>
         <button id="repo-save" value="default" type="button" class="btn accent">Clone and add</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="project-settings-dialog" class="modal">
+    <form method="dialog" id="project-settings-form" class="modal-form">
+      <h2>Project Settings</h2>
+      <label>Nickname
+        <input id="project-settings-nickname" type="text" placeholder="Optional" />
+      </label>
+      <menu>
+        <button value="cancel" type="button" class="btn" onclick="this.closest('dialog')?.close()">Cancel</button>
+        <button id="project-settings-save" value="default" type="button" class="btn accent">Save</button>
       </menu>
     </form>
   </dialog>

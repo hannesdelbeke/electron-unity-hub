@@ -43,6 +43,7 @@ const projectsMoreMenu = document.getElementById("projects-more-menu") as HTMLDi
 
 const diskDialog = document.getElementById("disk-dialog") as HTMLDialogElement | null;
 const repoDialog = document.getElementById("repo-dialog") as HTMLDialogElement | null;
+const projectSettingsDialog = document.getElementById("project-settings-dialog") as HTMLDialogElement | null;
 
 const diskPath = document.getElementById("disk-path") as HTMLInputElement | null;
 const diskNickname = document.getElementById("disk-nickname") as HTMLInputElement | null;
@@ -56,6 +57,7 @@ const repoUnityExe = document.getElementById("repo-unity-exe") as HTMLInputEleme
 
 const settingsDefaultUnityExe = document.getElementById("settings-default-unity-exe") as HTMLInputElement | null;
 const settingsTheme = document.getElementById("settings-theme") as HTMLSelectElement | null;
+const projectSettingsNickname = document.getElementById("project-settings-nickname") as HTMLInputElement | null;
 
 const tabProjects = document.getElementById("tab-projects");
 const tabInstalls = document.getElementById("tab-installs");
@@ -64,11 +66,16 @@ const tabSettings = document.getElementById("tab-settings");
 const viewProjects = document.getElementById("view-projects");
 const viewInstalls = document.getElementById("view-installs");
 const viewSettings = document.getElementById("view-settings");
+const topbarProjects = document.getElementById("topbar-projects");
+const topbarInstalls = document.getElementById("topbar-installs");
+const topbarSettings = document.getElementById("topbar-settings");
 
 let projects: ProjectEntry[] = [];
 let installs: UnityInstall[] = [];
 let selectedId = "";
 let searchText = "";
+let openProjectMenuId = "";
+let editingProjectId = "";
 let projectSort: { key: ProjectSortKey; direction: SortDirection } = { key: "lastOpenedIso", direction: "desc" };
 let installSort: { key: InstallSortKey; direction: SortDirection } = { key: "version", direction: "asc" };
 
@@ -100,6 +107,10 @@ function activateTab(tab: TabName): void {
   viewProjects?.classList.toggle("active", tab === "projects");
   viewInstalls?.classList.toggle("active", tab === "installs");
   viewSettings?.classList.toggle("active", tab === "settings");
+
+  topbarProjects?.classList.toggle("active", tab === "projects");
+  topbarInstalls?.classList.toggle("active", tab === "installs");
+  topbarSettings?.classList.toggle("active", tab === "settings");
 }
 
 function formatVcs(vcs: VcsStatus): string {
@@ -185,6 +196,10 @@ function openDialog(dialogEl: HTMLDialogElement | null): void {
   dialogEl.showModal();
 }
 
+function closeProjectRowMenus(): void {
+  openProjectMenuId = "";
+}
+
 function createProjectEntry(partial: Partial<ProjectEntry>): ProjectEntry {
   return {
     id: partial.id ?? "",
@@ -205,6 +220,27 @@ async function launchProjectRow(project: ProjectEntry): Promise<void> {
   const result = await window.launcherApi.launchOrFocus(project);
   setStatus(result.message);
   await refreshProjects(false);
+}
+
+function openProjectSettings(project: ProjectEntry): void {
+  editingProjectId = project.id;
+  if (projectSettingsNickname) {
+    projectSettingsNickname.value = project.nickname;
+  }
+  projectSettingsDialog?.showModal();
+}
+
+async function removeProjectById(id: string): Promise<void> {
+  projects = await window.launcherApi.deleteProject(id);
+  if (selectedId === id) {
+    selectedId = "";
+  }
+  if (editingProjectId === id) {
+    editingProjectId = "";
+    projectSettingsDialog?.close();
+  }
+  await renderProjectsTable();
+  setStatus("Project removed");
 }
 
 async function renderProjectsTable(): Promise<void> {
@@ -295,6 +331,52 @@ async function renderProjectsTable(): Promise<void> {
       }
       tr.appendChild(td);
     }
+
+    const actionsTd = document.createElement("td");
+    const actionsWrap = document.createElement("div");
+    actionsWrap.className = "row-actions";
+    const actionsButton = document.createElement("button");
+    actionsButton.className = "icon-btn row-action-btn";
+    actionsButton.type = "button";
+    actionsButton.textContent = "...";
+    actionsButton.setAttribute("aria-label", "Project actions");
+    actionsButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openProjectMenuId = openProjectMenuId === project.id ? "" : project.id;
+      void renderProjectsTable();
+    });
+    actionsWrap.appendChild(actionsButton);
+
+    const rowMenu = document.createElement("div");
+    rowMenu.className = `menu row-menu${openProjectMenuId === project.id ? "" : " hidden"}`;
+    rowMenu.addEventListener("click", (event) => event.stopPropagation());
+
+    const settingsBtn = document.createElement("button");
+    settingsBtn.className = "menu-item";
+    settingsBtn.type = "button";
+    settingsBtn.textContent = "Settings";
+    settingsBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closeProjectRowMenus();
+      openProjectSettings(project);
+      void renderProjectsTable();
+    });
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "menu-item danger-item";
+    removeBtn.type = "button";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      closeProjectRowMenus();
+      await removeProjectById(project.id);
+    });
+
+    rowMenu.appendChild(settingsBtn);
+    rowMenu.appendChild(removeBtn);
+    actionsWrap.appendChild(rowMenu);
+    actionsTd.appendChild(actionsWrap);
+    tr.appendChild(actionsTd);
 
     tr.addEventListener("click", async () => {
       selectedId = project.id;
@@ -475,10 +557,7 @@ async function removeSelectedProject(): Promise<void> {
     setStatus("Select a project by clicking a row first");
     return;
   }
-  projects = await window.launcherApi.deleteProject(selectedId);
-  selectedId = "";
-  await renderProjectsTable();
-  setStatus("Project removed");
+  await removeProjectById(selectedId);
 }
 
 function wireSidebarTabs(): void {
@@ -545,6 +624,10 @@ function wireGlobalEvents(): void {
     }
     if (!target.closest(".projects-more-wrap")) {
       closeProjectsMenu();
+    }
+    if (!target.closest(".row-actions")) {
+      closeProjectRowMenus();
+      void renderProjectsTable();
     }
   });
 
@@ -653,6 +736,29 @@ function wireSettingsView(): void {
   });
 }
 
+function wireProjectSettingsDialog(): void {
+  document.getElementById("project-settings-save")?.addEventListener("click", async () => {
+    const id = editingProjectId;
+    if (!id) {
+      return;
+    }
+    const existing = projects.find((project) => project.id === id);
+    if (!existing) {
+      return;
+    }
+
+    const updated: ProjectEntry = {
+      ...existing,
+      nickname: requireValue(projectSettingsNickname),
+    };
+    projects = await window.launcherApi.saveProject(updated);
+    editingProjectId = "";
+    projectSettingsDialog?.close();
+    await renderProjectsTable();
+    setStatus("Project settings saved");
+  });
+}
+
 async function init(): Promise<void> {
   try {
     wireSidebarTabs();
@@ -661,6 +767,7 @@ async function init(): Promise<void> {
     wireDiskDialog();
     wireRepoDialog();
     wireSettingsView();
+    wireProjectSettingsDialog();
     activateTab("projects");
     await refreshProjects(false);
   } catch (error) {

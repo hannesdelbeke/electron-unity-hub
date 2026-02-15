@@ -31,7 +31,12 @@ declare global {
       detectUnityVersion: (projectPath: string) => Promise<string>;
       getVcsStatus: (projectPath: string) => Promise<VcsStatus>;
       getUnityInstalls: () => Promise<UnityInstall[]>;
-      launchOrFocus: (project: ProjectEntry) => Promise<{ ok: boolean; message: string; focused?: boolean }>;
+      launchOrFocus: (project: ProjectEntry) => Promise<{
+        ok: boolean;
+        message: string;
+        focused?: boolean;
+        resolvedUnityExe?: string;
+      }>;
       launchUnityEditor: (editorPath: string) => Promise<{ ok: boolean; message: string }>;
       pickDirectory: () => Promise<string>;
       pickFile: () => Promise<string>;

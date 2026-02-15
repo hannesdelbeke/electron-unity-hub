@@ -20,6 +20,8 @@
   --warning-bg: #ffe2e2;
   --warning-border: #f0a4a4;
   --warning-text: #a52626;
+  --status-success: #1d8a4b;
+  --topbar-height: 62px;
   font-family: "Segoe UI", "Inter", system-ui, sans-serif;
 }
 
@@ -45,6 +47,7 @@
     --warning-bg: #3d2323;
     --warning-border: #8a3a3a;
     --warning-text: #ff9f9f;
+    --status-success: #5bd38d;
   }
 }
 
@@ -70,6 +73,7 @@
   --warning-bg: #ffe2e2;
   --warning-border: #f0a4a4;
   --warning-text: #a52626;
+  --status-success: #1d8a4b;
 }
 
 :root[data-theme="dark"] {
@@ -94,6 +98,7 @@
   --warning-bg: #3d2323;
   --warning-border: #8a3a3a;
   --warning-text: #ff9f9f;
+  --status-success: #5bd38d;
 }
 
 * { box-sizing: border-box; }
@@ -140,6 +145,18 @@ body {
 .content {
   min-width: 0;
   padding: 20px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+}
+
+.topbar-host {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0;
+  overflow: hidden;
+  height: var(--topbar-height);
 }
 
 .view {
@@ -148,9 +165,9 @@ body {
 
 .view.active {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: 1fr auto;
   gap: 12px;
-  min-height: calc(100vh - 40px);
+  min-height: calc(100vh - 160px);
 }
 
 .toolbar {
@@ -158,11 +175,21 @@ body {
   grid-template-columns: auto auto 1fr auto auto;
   gap: 10px;
   align-items: center;
+  padding: 10px;
+  min-height: var(--topbar-height);
 }
 
-.installs-toolbar {
-  grid-template-columns: auto auto;
-  justify-content: space-between;
+.topbar {
+  display: none;
+  height: 100%;
+}
+
+.topbar.active {
+  display: grid;
+}
+
+.view-host {
+  min-height: 0;
 }
 
 h1 {
@@ -252,8 +279,9 @@ tr.selected {
 
 #status {
   margin-left: auto;
-  color: var(--muted);
+  color: var(--status-success);
   font-size: 12px;
+  font-weight: 600;
 }
 
 .muted {
@@ -293,6 +321,7 @@ tr.selected {
 
 .add-wrap { position: relative; }
 .projects-more-wrap { position: relative; }
+.row-actions { position: relative; display: flex; justify-content: flex-end; }
 
 .icon-btn {
   border: 1px solid var(--line);
@@ -309,6 +338,17 @@ tr.selected {
 
 .icon-btn:hover {
   background: var(--btn-hover);
+}
+
+.row-action-btn {
+  height: 30px;
+  min-width: 34px;
+  border-radius: 6px;
+}
+
+.row-menu {
+  top: 34px;
+  right: 0;
 }
 
 .menu {
@@ -338,6 +378,10 @@ tr.selected {
 
 .menu-item:hover {
   background: var(--row-hover);
+}
+
+.menu-item.danger-item {
+  color: var(--danger-text);
 }
 
 .hidden { display: none; }

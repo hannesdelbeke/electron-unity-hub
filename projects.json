@@ -1,34 +1,6 @@
-{
-  "projects": [
-    {
-      "id": "9c63b427-0150-4eb7-8e89-efc7a89155d8",
-      "nickname": "2016-CA-gamejam",
-      "name": "2016-CA-gamejam",
-      "path": "D:\\repos\\2016-CA-gamejam",
-      "unityVersion": "5.6.1f1",
-      "unityExe": "",
-      "lastOpenedIso": "2024-04-08T20:55:53.008Z"
-    },
-    {
-      "id": "e584c8f3-28e1-47ad-bbe9-554b22e8dd39",
-      "nickname": "My project",
-      "name": "My project",
-      "path": "C:\\repos\\test unity project\\My project",
-      "unityVersion": "6000.0.43f1",
-      "unityExe": "",
-      "lastOpenedIso": "2025-03-27T15:42:35.437Z"
-    },
-    {
-      "id": "9025a568-46d7-4566-b6c4-4f1010529b34",
-      "nickname": "My project (1)",
-      "name": "My project (1)",
-      "path": "D:\\repos\\towerdefense\\My project (1)",
-      "unityVersion": "6000.0.43f1",
-      "unityExe": "",
-      "lastOpenedIso": "2026-02-14T23:44:21.474Z"
-    }
-  ],
+﻿{
+  "projects": [],
   "meta": {
-    "firstRunBootstrapDone": true
+    "firstRunBootstrapDone": false
   }
 }

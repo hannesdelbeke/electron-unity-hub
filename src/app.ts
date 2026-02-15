@@ -158,6 +158,13 @@ function addInstall(candidates: UnityInstall[], seen: Set<string>, install: Unit
   candidates.push(install);
 }
 
+function addInstallIfExists(candidates: UnityInstall[], seen: Set<string>, install: UnityInstall): void {
+  if (!install.exists) {
+    return;
+  }
+  addInstall(candidates, seen, install);
+}
+
 function scanInstallRoot(baseRoot: string, candidates: UnityInstall[], seen: Set<string>, source: string): void {
   if (!existsSync(baseRoot)) {
     return;
@@ -225,16 +232,36 @@ function getUnityInstalls(): UnityInstall[] {
     const pf86 = process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
     scanInstallRoot(path.join(pf, "Unity", "Hub", "Editor"), installs, seen, "Hub-style path");
     scanInstallRoot(path.join(pf86, "Unity", "Hub", "Editor"), installs, seen, "Hub-style path");
-    scanInstallRoot(pf, installs, seen, "Program Files");
-    scanInstallRoot(pf86, installs, seen, "Program Files (x86)");
+    addInstallIfExists(installs, seen, {
+      version: "legacy",
+      path: path.join(pf, "Unity", "Editor", "Unity.exe"),
+      source: "Legacy Unity path",
+      exists: existsSync(path.join(pf, "Unity", "Editor", "Unity.exe")),
+    });
+    addInstallIfExists(installs, seen, {
+      version: "legacy",
+      path: path.join(pf86, "Unity", "Editor", "Unity.exe"),
+      source: "Legacy Unity path",
+      exists: existsSync(path.join(pf86, "Unity", "Editor", "Unity.exe")),
+    });
   } else if (process.platform === "darwin") {
     scanInstallRoot("/Applications/Unity/Hub/Editor", installs, seen, "Hub-style path");
-    scanInstallRoot("/Applications", installs, seen, "Applications");
+    addInstallIfExists(installs, seen, {
+      version: "legacy",
+      path: "/Applications/Unity/Unity.app",
+      source: "Legacy Unity path",
+      exists: existsSync("/Applications/Unity/Unity.app"),
+    });
   } else {
     const home = process.env.HOME ?? "";
     scanInstallRoot(path.join(home, ".local", "share", "unity3d", "Hub", "Editor"), installs, seen, "Hub-style path");
     scanInstallRoot("/opt/Unity/Hub/Editor", installs, seen, "System");
-    scanInstallRoot("/usr/local", installs, seen, "System");
+    addInstallIfExists(installs, seen, {
+      version: "legacy",
+      path: "/opt/Unity/Editor/Unity",
+      source: "Legacy Unity path",
+      exists: existsSync("/opt/Unity/Editor/Unity"),
+    });
   }
 
   loadHubEditorMetadata(installs, seen);
@@ -318,27 +345,54 @@ exit 1
   return p.status === 0;
 }
 
-function launchProject(project: ProjectEntry): { ok: boolean; message: string; focused?: boolean } {
+function launchProject(project: ProjectEntry): {
+  ok: boolean;
+  message: string;
+  focused?: boolean;
+  resolvedUnityExe?: string;
+} {
   if (!existsSync(project.path)) {
     return { ok: false, message: "Project path does not exist." };
   }
 
-  if (projectIsOpen(project.path)) {
-    const focused = focusUnityWindow(project.name || project.nickname);
-    return {
-      ok: focused,
-      message: focused ? "Project already open. Focused existing Unity window." : "Project appears open, but focus failed.",
-      focused,
-    };
+  const projectVersion = project.unityVersion.trim().toLowerCase();
+  const existingExe = project.unityExe.trim();
+  let resolvedExe = existingExe;
+  if (!resolvedExe || !existsSync(resolvedExe)) {
+    const installs = getUnityInstalls().filter((install) => install.exists);
+    const exact = installs.find((install) => install.version.trim().toLowerCase() === projectVersion);
+    const compatible = installs.find((install) => {
+      const v = install.version.trim().toLowerCase();
+      return v.startsWith(projectVersion) || projectVersion.startsWith(v);
+    });
+    resolvedExe = exact?.path ?? compatible?.path ?? installs[0]?.path ?? "";
   }
 
-  if (!project.unityExe || !existsSync(project.unityExe)) {
+  let prefix = "";
+  if (projectIsOpen(project.path)) {
+    const focused = focusUnityWindow(project.name || project.nickname);
+    if (focused) {
+      return {
+        ok: true,
+        message: "Project already open. Focused existing Unity window.",
+        focused,
+        resolvedUnityExe: resolvedExe,
+      };
+    }
+    prefix = "Project appears open, but focus failed. Attempting launch. ";
+  }
+
+  if (!resolvedExe || !existsSync(resolvedExe)) {
     return { ok: false, message: "Unity executable is not set or does not exist." };
   }
 
   try {
-    spawn(project.unityExe, ["-projectPath", project.path], { detached: true, stdio: "ignore" }).unref();
-    return { ok: true, message: "Launched Unity project." };
+    spawn(resolvedExe, ["-projectPath", project.path], { detached: true, stdio: "ignore" }).unref();
+    return {
+      ok: true,
+      message: `${prefix}Launched Unity project.`,
+      resolvedUnityExe: resolvedExe,
+    };
   } catch (error) {
     return { ok: false, message: `Failed to launch: ${String(error)}` };
   }
@@ -463,7 +517,11 @@ app.whenReady().then(() => {
   ipcMain.handle("unity:launchOrFocus", (_event, project: ProjectEntry) => {
     const result = launchProject(project);
     if (result.ok && !result.focused) {
-      const updated = { ...project, lastOpenedIso: new Date().toISOString() };
+      const updated = {
+        ...project,
+        unityExe: result.resolvedUnityExe || project.unityExe,
+        lastOpenedIso: new Date().toISOString(),
+      };
       upsertProject(updated);
     }
     return result;

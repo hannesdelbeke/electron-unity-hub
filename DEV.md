@@ -81,6 +81,9 @@ Demo constraints:
 - Keep task planning in `TODO.md`, not in this file.
 - Keep the GitHub Pages preview up to date after every major change.
 - Maintain GitHub Actions packaging so end users can download builds without using npm/terminal.
+- Always render and publish preview screenshots in dark mode.
+- GitHub Pages preview media must use a max display size to avoid oversized rendering.
+- GitHub Pages preview should preserve widescreen layout; on mobile/tablet use horizontal scrolling instead of compressing to a narrow layout when needed.
 
 ## Major Change Checklist
 

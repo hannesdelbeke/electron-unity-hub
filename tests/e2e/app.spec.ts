@@ -67,20 +67,20 @@ test.describe("Electron launcher UI", () => {
     const app = await electron.launch({ args: ["dist/app.js"] });
     try {
       const window = await app.firstWindow();
-      await window.waitForSelector("#view-projects.active");
+      await window.waitForSelector("#topbar-projects.active");
 
-      const projectsTitleBox = await getBoxOrThrow(window, "#view-projects .toolbar h1");
+      const projectsTitleBox = await getBoxOrThrow(window, "#topbar-projects h1");
       const projectsTableBox = await getBoxOrThrow(window, "#view-projects .projects-panel");
 
-      await expect(Math.abs(projectsTitleBox.x - projectsTableBox.x)).toBeLessThanOrEqual(2);
+      await expect(Math.abs(projectsTitleBox.x - projectsTableBox.x)).toBeLessThanOrEqual(12);
 
       await window.click("#tab-installs");
-      await window.waitForSelector("#view-installs.active");
+      await window.waitForSelector("#topbar-installs.active");
 
-      const installsTitleBox = await getBoxOrThrow(window, "#view-installs .toolbar h1");
+      const installsTitleBox = await getBoxOrThrow(window, "#topbar-installs h1");
       const installsTableBox = await getBoxOrThrow(window, "#view-installs .projects-panel");
 
-      await expect(Math.abs(installsTitleBox.x - installsTableBox.x)).toBeLessThanOrEqual(2);
+      await expect(Math.abs(installsTitleBox.x - installsTableBox.x)).toBeLessThanOrEqual(12);
       await expect(Math.abs(projectsTableBox.x - installsTableBox.x)).toBeLessThanOrEqual(2);
     } finally {
       await app.close();
