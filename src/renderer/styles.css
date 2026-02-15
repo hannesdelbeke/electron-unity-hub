@@ -17,6 +17,8 @@
   --backdrop: rgba(9, 12, 16, 0.35);
   --sidebar-bg: #eef1f4;
   --sidebar-active: #dbeeff;
+  --sidebar-hover: #e5eaee;
+  --sidebar-tab-border: #d7dde5;
   --warning-bg: #ffe2e2;
   --warning-border: #f0a4a4;
   --warning-text: #a52626;
@@ -44,6 +46,8 @@
     --backdrop: rgba(0, 0, 0, 0.55);
     --sidebar-bg: #151a20;
     --sidebar-active: #1f3650;
+    --sidebar-hover: #1b2430;
+    --sidebar-tab-border: #2f3a49;
     --warning-bg: #3d2323;
     --warning-border: #8a3a3a;
     --warning-text: #ff9f9f;
@@ -70,6 +74,8 @@
   --backdrop: rgba(9, 12, 16, 0.35);
   --sidebar-bg: #eef1f4;
   --sidebar-active: #dbeeff;
+  --sidebar-hover: #e5eaee;
+  --sidebar-tab-border: #d7dde5;
   --warning-bg: #ffe2e2;
   --warning-border: #f0a4a4;
   --warning-text: #a52626;
@@ -95,6 +101,8 @@
   --backdrop: rgba(0, 0, 0, 0.55);
   --sidebar-bg: #151a20;
   --sidebar-active: #1f3650;
+  --sidebar-hover: #1b2430;
+  --sidebar-tab-border: #2f3a49;
   --warning-bg: #3d2323;
   --warning-border: #8a3a3a;
   --warning-text: #ff9f9f;
@@ -121,23 +129,59 @@ body {
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .side-tab {
-  border: 1px solid var(--line);
-  background: transparent;
+  border: 1px solid var(--sidebar-tab-border);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
   color: var(--text);
-  border-radius: 8px;
-  height: 38px;
+  border-radius: 12px;
+  height: 44px;
   padding: 0 12px;
   text-align: left;
   cursor: pointer;
   font: inherit;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.side-tab:hover {
+  background: var(--sidebar-hover);
 }
 
 .side-tab.active {
   background: var(--sidebar-active);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--sidebar-tab-border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.tab-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+  border: 1px solid var(--sidebar-tab-border);
+}
+
+.side-tab.active .tab-icon {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.tab-label {
+  font-weight: 600;
+  font-size: 13px;
 }
 
 .side-spacer { flex: 1; }
